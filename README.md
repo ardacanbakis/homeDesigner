@@ -1,73 +1,126 @@
-# React + TypeScript + Vite
+# HomeDesigner
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A browser-based, desktop-first home and room designer. Sketch your floor plan in 2D, toggle to 3D to walk around it, and drag preset furniture into rooms — all in the browser, no install.
 
-Currently, two official plugins are available:
+**Live demo:** https://ardacanbakis.github.io/homedesigner/
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## What it does
 
-## React Compiler
+- **2D floor-plan editor** — draw walls by clicking, with snap-to-grid and snap-to-endpoint. Pan with middle-mouse, zoom with scroll. Endpoint handles let you reshape existing walls. Live length labels on every wall.
+- **3D viewer** — toggle from 2D to 3D and the same design renders as extruded walls in a lit Three.js scene with orbit/pan/zoom.
+- **Furniture catalog** — 14 presets across bedroom / kitchen / living / bathroom / office:
+  bed, wardrobe, dresser, fridge, washer, stove, sink, sofa, table, chair, TV, toilet, bathtub, desk.
+  Each one is rendered as a proportioned 3D primitive with detail geometry (sofa has armrests + back, bed has a pillow + headboard, toilet has tank + bowl, etc.).
+- **Drag-drop placement** — drag from the palette onto the workspace, or click to place at center. Drag in 2D to move; press `R` to rotate 90°; `Delete` to remove.
+- **Inspector** — for the selected item: width/depth/height inputs, rotation, position, delete.
+- **Persistence** — auto-saves to `localStorage` on every change. **Export JSON** / **Import JSON** / **New** in the toolbar.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Keyboard shortcuts
 
-## Expanding the ESLint configuration
+| Key | Action |
+|---|---|
+| `W` | Wall tool |
+| `V` | Select tool |
+| `Esc` | Cancel current tool |
+| `R` | Rotate selected furniture 90° |
+| `Delete` / `Backspace` | Delete selection |
+| Scroll | Zoom (2D and 3D) |
+| Middle-drag | Pan (2D) |
+| Left-drag (3D) | Orbit |
+| Right-drag (3D) | Pan |
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Tech stack
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+| Layer | Library |
+|---|---|
+| Build | Vite + React 18 + TypeScript |
+| 3D scene | `three`, `@react-three/fiber`, `@react-three/drei` |
+| 2D canvas | `react-konva` (Konva.js) |
+| State | `zustand` |
+| Styling | Tailwind CSS v4 |
+| IDs | `nanoid` |
+| Tests | Vitest |
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+Single source of truth: one Zustand store holds `{ walls, openings, furniture, selection }`. Both the 2D canvas and 3D scene render from it, so switching views is instant and no data conversion happens.
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Run it locally
+
+```bash
+git clone https://github.com/ardacanbakis/homeDesigner.git
+cd homeDesigner
+npm install
+npm run dev      # http://localhost:5173/homedesigner/
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Other scripts:
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run build    # production bundle into dist/
+npm run preview  # preview production build
+npm run lint
 ```
+
+## Deployment
+
+GitHub Actions builds and publishes to GitHub Pages on every push to `main`. The workflow lives at [.github/workflows/deploy.yml](.github/workflows/deploy.yml).
+
+One-time setup (after the first push):
+
+1. Go to **Settings → Pages**.
+2. Under **Source**, choose **GitHub Actions**.
+
+The site publishes to `https://<owner>.github.io/homedesigner/` within ~2 minutes of a push.
+
+The `base` path in [vite.config.ts](vite.config.ts) is set to `/homedesigner/` so asset URLs resolve under the project-page subpath.
+
+## Project layout
+
+```
+src/
+  store/
+    types.ts            # data model: Wall, Furniture, Design, ...
+    design.ts           # Zustand store + actions
+  geometry/
+    catalog.ts          # 14 furniture presets (size, color, category, icon)
+    walls.ts            # wall math + snapping
+  persistence/
+    storage.ts          # localStorage + JSON import/export
+  ui/
+    Toolbar.tsx         # 2D/3D toggle, tools, file ops
+    Palette.tsx         # left sidebar — furniture catalog
+    Inspector.tsx       # right sidebar — selected-object props
+  editor2d/
+    Canvas2D.tsx        # react-konva workspace
+  scene3d/
+    Scene3D.tsx         # R3F canvas, lighting, camera, grid
+    Walls3D.tsx         # extruded wall meshes
+    Furniture3D.tsx     # furniture primitives w/ detail geometry
+  App.tsx               # three-pane layout, swaps Canvas2D ↔ Scene3D
+  main.tsx
+```
+
+## Roadmap
+
+Not yet implemented (open for follow-ups):
+
+- **Doors & windows** — openings cut into the wall extrusion via `THREE.Shape` + `Path` holes.
+- **Multi-floor + stairs** — `Design` becomes `{ floors: Floor[] }`; stair preset links two floors and renders as a stepped box.
+- **GLB models** — replace primitives with CC0 glTF assets (Poly Haven, Kenney, Quaternius), preloaded with drei's `useGLTF`.
+- **Undo / redo** — wire `zundo` into the Zustand store.
+- **Room detection** — derive rooms from wall loops (the blueprint3d-style cycle algorithm), then show room labels and area.
+- **Mobile / touch** — currently desktop-first.
+
+## References
+
+The design borrows patterns from several open-source projects worth a look:
+
+- [furnishup/blueprint3d](https://github.com/furnishup/blueprint3d) — the canonical "2D floor plan → 3D" Three.js project.
+- [theLodgeBots/open3dFloorplan](https://github.com/theLodgeBots/open3dFloorplan) — SvelteKit + Three.js, large furniture catalog.
+- [amitukind/architect3d](https://github.com/amitukind/architect3d) — WebGL interior designer.
+- [CodeHole7/threejs-3d-room-designer](https://github.com/CodeHole7/threejs-3d-room-designer) — React + Three.js room planner.
+
+Commercial peers studied for UX: Planner 5D, Coohom, Homestyler, Sweet Home 3D, RoomSketcher.
+
+## License
+
+MIT.
