@@ -2,7 +2,7 @@
 
 A browser-based, desktop-first home and room designer. Sketch your floor plan in 2D, toggle to 3D to walk around it, and drag preset furniture into rooms — all in the browser, no install.
 
-**Live demo:** https://ardacanbakis.github.io/homedesigner/
+**Live demo:** https://ardacanbakis.github.io/homeDesigner/
 
 ## What it does
 
@@ -49,7 +49,7 @@ Single source of truth: one Zustand store holds `{ walls, openings, furniture, s
 git clone https://github.com/ardacanbakis/homeDesigner.git
 cd homeDesigner
 npm install
-npm run dev      # http://localhost:5173/homedesigner/
+npm run dev      # http://localhost:5173/homeDesigner/
 ```
 
 Other scripts:
@@ -69,7 +69,7 @@ One-time setup (after the first push):
 1. Go to **Settings → Pages**.
 2. Under **Source**, choose **GitHub Actions**.
 
-The site publishes to `https://<owner>.github.io/homedesigner/` within ~2 minutes of a push.
+The site publishes to `https://<owner>.github.io/homeDesigner/` within ~2 minutes of a push.
 
 The `base` path in [vite.config.ts](vite.config.ts) is set to `/homedesigner/` so asset URLs resolve under the project-page subpath.
 
