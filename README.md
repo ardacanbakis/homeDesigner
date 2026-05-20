@@ -8,9 +8,9 @@ A browser-based, desktop-first home and room designer. Sketch your floor plan in
 
 - **2D floor-plan editor** — draw walls by clicking, with snap-to-grid and snap-to-endpoint. Pan with middle-mouse, zoom with scroll. Endpoint handles let you reshape existing walls. Live length labels on every wall.
 - **3D viewer** — toggle from 2D to 3D and the same design renders as extruded walls in a lit Three.js scene with orbit/pan/zoom.
-- **Furniture catalog** — 14 presets across bedroom / kitchen / living / bathroom / office:
-  bed, wardrobe, dresser, fridge, washer, stove, sink, sofa, table, chair, TV, toilet, bathtub, desk.
-  Each one is rendered as a proportioned 3D primitive with detail geometry (sofa has armrests + back, bed has a pillow + headboard, toilet has tank + bowl, etc.).
+- **Furniture catalog** — 15 presets across bedroom / kitchen / living / bathroom / office / structure:
+  bed, wardrobe, dresser, fridge, washer, stove, sink, sofa, table, chair, TV, toilet, bathtub, desk, stairs.
+  Each one renders as a real **GLTF model** with detailed sub-geometry and PBR materials (sofa has armrests + back + legs, bed has a pillow + headboard, fridge has a metallic body + handle, stove has burners + knobs, etc.).
 - **Drag-drop placement** — drag from the palette onto the workspace, or click to place at center. Drag in 2D to move; press `R` to rotate 90°; `Delete` to remove.
 - **Inspector** — for the selected item: width/depth/height inputs, rotation, position, delete.
 - **Persistence** — auto-saves to `localStorage` on every change. **Export JSON** / **Import JSON** / **New** in the toolbar.
@@ -76,12 +76,16 @@ The `base` path in [vite.config.ts](vite.config.ts) is set to `/homedesigner/` s
 ## Project layout
 
 ```
+scripts/
+  generate-models.mjs   # builds public/models/*.gltf from Three.js geometry
+public/
+  models/               # 15 generated GLTF furniture models (~220 KB total)
 src/
   store/
     types.ts            # data model: Wall, Furniture, Design, ...
     design.ts           # Zustand store + actions
   geometry/
-    catalog.ts          # 14 furniture presets (size, color, category, icon)
+    catalog.ts          # 15 furniture presets (size, color, category, icon)
     walls.ts            # wall math + snapping
   persistence/
     storage.ts          # localStorage + JSON import/export
@@ -94,10 +98,14 @@ src/
   scene3d/
     Scene3D.tsx         # R3F canvas, lighting, camera, grid
     Walls3D.tsx         # extruded wall meshes
-    Furniture3D.tsx     # furniture primitives w/ detail geometry
+    Furniture3D.tsx     # GLTF furniture loaded via useGLTF, auto-fit to size
   App.tsx               # three-pane layout, swaps Canvas2D ↔ Scene3D
   main.tsx
 ```
+
+### How furniture models are built
+
+`npm run build` runs `scripts/generate-models.mjs` first (via the `prebuild` hook). The script constructs each furniture item from Three.js primitives (boxes, cylinders, torus, etc.), then serializes the geometry to a `.gltf` file with embedded base64 buffers — no external downloads, no native exporter. At runtime `Furniture3D.tsx` loads each model with drei's `useGLTF`, measures its bounding box, and scales it to the exact `w × h × d` from the inspector so resizing still works. To swap in real CC0 assets later, just drop a `.glb`/`.gltf` into `public/models/<kind>.gltf` — the loader picks it up unchanged. Regenerate manually with `npm run generate-models`.
 
 ## Roadmap
 
@@ -106,12 +114,13 @@ Done:
 - **Doors & windows** — openings cut into the wall extrusion via `THREE.Shape` + `Path` holes.
 - **Undo / redo** — `zundo` temporal middleware, tracking only the design.
 - **Multi-floor + stairs** — `Design` holds `floors: Floor[]`; a floor switcher in the toolbar edits one floor at a time (with the floor below ghosted in 2D), and all floors render stacked at their real heights in 3D. Stairs are a catalog preset rendered as a stepped 3D run.
+- **GLTF models** — every furniture kind is a generated `.gltf` model with PBR materials, loaded via drei's `useGLTF` and preloaded at startup. See "How furniture models are built" above.
 
 Not yet implemented (open for follow-ups):
 
-- **GLB models** — replace primitives with CC0 glTF assets (Poly Haven, Kenney, Quaternius), preloaded with drei's `useGLTF`.
 - **Room detection** — derive rooms from wall loops (the blueprint3d-style cycle algorithm), then show room labels and area.
 - **Mobile / touch** — currently desktop-first.
+- **Higher-fidelity assets** — swap the generated models for CC0 glTF assets (Poly Haven, Kenney, Quaternius) by dropping files into `public/models/`.
 
 ## References
 
