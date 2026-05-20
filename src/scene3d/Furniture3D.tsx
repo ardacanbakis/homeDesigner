@@ -1,202 +1,100 @@
-import { Html } from '@react-three/drei'
+import { Suspense, useMemo } from 'react'
+import { useGLTF, Html } from '@react-three/drei'
+import * as THREE from 'three'
 import type { Furniture } from '../store/types'
 import { CATALOG_MAP } from '../geometry/catalog'
 import { useDesignStore } from '../store/design'
 import { m } from './units'
 
-function FurnitureItem({ item, elevation, interactive }: { item: Furniture; elevation: number; interactive: boolean }) {
+const BASE = import.meta.env.BASE_URL
+
+const MODEL_KINDS = [
+  'bed', 'wardrobe', 'dresser', 'fridge', 'washer', 'stove', 'sink',
+  'sofa', 'table', 'chair', 'toilet', 'bathtub', 'tv', 'desk', 'stairs',
+] as const
+
+// Start loading all models immediately
+for (const kind of MODEL_KINDS) {
+  useGLTF.preload(`${BASE}models/${kind}.gltf`)
+}
+
+type ModelKind = typeof MODEL_KINDS[number]
+
+function GltfModel({ kind, w, h, d }: { kind: ModelKind; w: number; h: number; d: number }) {
+  const { scene } = useGLTF(`${BASE}models/${kind}.gltf`)
+
+  const { cloned, sizeX, sizeY, sizeZ, minY, centerX, centerZ } = useMemo(() => {
+    const cloned = scene.clone(true)
+    cloned.position.set(0, 0, 0)
+    cloned.rotation.set(0, 0, 0)
+    cloned.scale.set(1, 1, 1)
+    cloned.updateWorldMatrix(true, true)
+    cloned.traverse(node => {
+      if ((node as THREE.Mesh).isMesh) {
+        const mesh = node as THREE.Mesh
+        mesh.castShadow = true
+        mesh.receiveShadow = true
+      }
+    })
+    const box = new THREE.Box3().setFromObject(cloned)
+    const size = new THREE.Vector3()
+    box.getSize(size)
+    const center = new THREE.Vector3()
+    box.getCenter(center)
+    return {
+      cloned,
+      sizeX: Math.max(size.x, 0.001),
+      sizeY: Math.max(size.y, 0.001),
+      sizeZ: Math.max(size.z, 0.001),
+      minY: box.min.y,
+      centerX: center.x,
+      centerZ: center.z,
+    }
+  }, [scene])
+
+  // Scale so model fits exactly in w×h×d, with base at y=0 and centered in X/Z
+  const sx = w / sizeX
+  const sy = h / sizeY
+  const sz = d / sizeZ
+  const tx = -centerX * sx
+  const ty = -minY * sy
+  const tz = -centerZ * sz
+
+  return (
+    <group position={[tx, ty, tz]} scale={[sx, sy, sz]}>
+      <primitive object={cloned} />
+    </group>
+  )
+}
+
+function FallbackBox({ w, h, d, color }: { w: number; h: number; d: number; color: string }) {
+  return (
+    <mesh position={[0, h / 2, 0]} castShadow>
+      <boxGeometry args={[w, h, d]} />
+      <meshStandardMaterial color={color} roughness={0.7} />
+    </mesh>
+  )
+}
+
+function FurnitureItem({
+  item, elevation, interactive,
+}: {
+  item: Furniture; elevation: number; interactive: boolean
+}) {
   const { selectedId, setSelected } = useDesignStore()
   const isSelected = interactive && selectedId === item.id
   const cat = CATALOG_MAP[item.kind]
 
-  // cm -> meters (three world units)
   const w = m(item.size.w)
   const d = m(item.size.d)
   const h = m(item.size.h)
 
-  // Store x,y are floor plane (top-left of footprint); Three uses x,z. Center the mesh.
+  // Position: footprint top-left → center of footprint; base at floor elevation
   const x = m(item.position.x) + w / 2
   const z = m(item.position.y) + d / 2
-  const y = m(elevation) + h / 2
+  const y = m(elevation)
 
   const color = item.color ?? cat.color
-
-  // Different shapes for different furniture types
-  const getShape = () => {
-    switch (item.kind) {
-      case 'chair':
-        return (
-          <>
-            {/* Seat */}
-            <mesh position={[0, 0, 0]} castShadow>
-              <boxGeometry args={[w, h * 0.5, d]} />
-              <meshStandardMaterial color={color} roughness={0.8} />
-            </mesh>
-            {/* Back */}
-            <mesh position={[0, h * 0.25, -d * 0.4]} castShadow>
-              <boxGeometry args={[w, h * 0.5, d * 0.1]} />
-              <meshStandardMaterial color={color} roughness={0.8} />
-            </mesh>
-          </>
-        )
-      case 'sofa':
-        return (
-          <>
-            {/* Base */}
-            <mesh position={[0, -h * 0.15, 0]} castShadow>
-              <boxGeometry args={[w, h * 0.5, d]} />
-              <meshStandardMaterial color={color} roughness={0.9} />
-            </mesh>
-            {/* Back */}
-            <mesh position={[0, h * 0.1, -d * 0.35]} castShadow>
-              <boxGeometry args={[w, h * 0.6, d * 0.2]} />
-              <meshStandardMaterial color={color} roughness={0.9} />
-            </mesh>
-            {/* Armrests */}
-            <mesh position={[w * 0.43, -h * 0.05, 0]} castShadow>
-              <boxGeometry args={[w * 0.1, h * 0.55, d * 0.7]} />
-              <meshStandardMaterial color={color} roughness={0.9} />
-            </mesh>
-            <mesh position={[-w * 0.43, -h * 0.05, 0]} castShadow>
-              <boxGeometry args={[w * 0.1, h * 0.55, d * 0.7]} />
-              <meshStandardMaterial color={color} roughness={0.9} />
-            </mesh>
-          </>
-        )
-      case 'bed':
-        return (
-          <>
-            {/* Mattress */}
-            <mesh position={[0, -h * 0.1, 0]} castShadow>
-              <boxGeometry args={[w * 0.95, h * 0.5, d * 0.8]} />
-              <meshStandardMaterial color="#e8d5b7" roughness={0.9} />
-            </mesh>
-            {/* Headboard */}
-            <mesh position={[0, h * 0.1, -d * 0.44]} castShadow>
-              <boxGeometry args={[w, h * 0.9, d * 0.08]} />
-              <meshStandardMaterial color={color} roughness={0.7} />
-            </mesh>
-            {/* Frame */}
-            <mesh position={[0, -h * 0.35, 0]} castShadow>
-              <boxGeometry args={[w, h * 0.2, d]} />
-              <meshStandardMaterial color={color} roughness={0.7} />
-            </mesh>
-            {/* Pillow */}
-            <mesh position={[0, h * 0.15, -d * 0.25]} castShadow>
-              <boxGeometry args={[w * 0.7, h * 0.12, d * 0.15]} />
-              <meshStandardMaterial color="#f5f5f5" roughness={1} />
-            </mesh>
-          </>
-        )
-      case 'fridge':
-        return (
-          <>
-            <mesh position={[0, 0, 0]} castShadow>
-              <boxGeometry args={[w, h, d]} />
-              <meshStandardMaterial color={color} roughness={0.2} metalness={0.6} />
-            </mesh>
-            {/* Handle */}
-            <mesh position={[w * 0.42, h * 0.1, d * 0.52]} castShadow>
-              <boxGeometry args={[w * 0.06, h * 0.3, d * 0.04]} />
-              <meshStandardMaterial color="#888" metalness={0.8} roughness={0.2} />
-            </mesh>
-          </>
-        )
-      case 'toilet':
-        return (
-          <>
-            {/* Bowl */}
-            <mesh position={[0, -h * 0.1, d * 0.1]} castShadow>
-              <cylinderGeometry args={[w * 0.45, w * 0.4, h * 0.5, 16]} />
-              <meshStandardMaterial color={color} roughness={0.1} />
-            </mesh>
-            {/* Tank */}
-            <mesh position={[0, h * 0.25, -d * 0.3]} castShadow>
-              <boxGeometry args={[w * 0.7, h * 0.45, d * 0.25]} />
-              <meshStandardMaterial color={color} roughness={0.1} />
-            </mesh>
-          </>
-        )
-      case 'bathtub':
-        return (
-          <>
-            <mesh position={[0, 0, 0]} castShadow>
-              <boxGeometry args={[w, h, d]} />
-              <meshStandardMaterial color={color} roughness={0.1} metalness={0.1} />
-            </mesh>
-            {/* Inner */}
-            <mesh position={[0, h * 0.1, 0]} castShadow>
-              <boxGeometry args={[w * 0.85, h * 0.4, d * 0.9]} />
-              <meshStandardMaterial color="#d0e8f0" roughness={0.05} />
-            </mesh>
-          </>
-        )
-      case 'stove':
-        return (
-          <>
-            <mesh position={[0, 0, 0]} castShadow>
-              <boxGeometry args={[w, h, d]} />
-              <meshStandardMaterial color={color} roughness={0.3} metalness={0.5} />
-            </mesh>
-            {/* Burners */}
-            {[-1, 1].map(xi => [-1, 1].map(zi => (
-              <mesh key={`${xi}${zi}`} position={[xi * w * 0.22, h * 0.51, zi * d * 0.22]} castShadow>
-                <cylinderGeometry args={[w * 0.12, w * 0.12, h * 0.04, 16]} />
-                <meshStandardMaterial color="#222" roughness={0.5} />
-              </mesh>
-            )))}
-          </>
-        )
-      case 'tv':
-        return (
-          <>
-            {/* Screen */}
-            <mesh position={[0, 0, 0]} castShadow>
-              <boxGeometry args={[w, h * 0.85, d]} />
-              <meshStandardMaterial color="#111" roughness={0.1} metalness={0.8} />
-            </mesh>
-            {/* Screen surface */}
-            <mesh position={[0, 0, d * 0.52]}>
-              <planeGeometry args={[w * 0.92, h * 0.78]} />
-              <meshStandardMaterial color="#1a1a2e" roughness={0} metalness={0.9} />
-            </mesh>
-            {/* Stand */}
-            <mesh position={[0, -h * 0.5, 0]}>
-              <boxGeometry args={[w * 0.2, h * 0.15, d * 3]} />
-              <meshStandardMaterial color="#333" roughness={0.3} />
-            </mesh>
-          </>
-        )
-      case 'stairs': {
-        // Stepped run climbing from floor to ceiling along +Z (local depth)
-        const steps = 14
-        const stepH = h / steps
-        const stepD = d / steps
-        return (
-          <>
-            {Array.from({ length: steps }).map((_, i) => (
-              <mesh
-                key={i}
-                position={[0, -h / 2 + stepH * (i + 0.5), -d / 2 + stepD * (i + 0.5)]}
-                castShadow
-                receiveShadow
-              >
-                <boxGeometry args={[w, stepH, stepD]} />
-                <meshStandardMaterial color={color} roughness={0.8} />
-              </mesh>
-            ))}
-          </>
-        )
-      }
-      default:
-        return (
-          <mesh position={[0, 0, 0]} castShadow>
-            <boxGeometry args={[w, h, d]} />
-            <meshStandardMaterial color={color} roughness={0.7} />
-          </mesh>
-        )
-    }
-  }
 
   return (
     <group
@@ -204,11 +102,13 @@ function FurnitureItem({ item, elevation, interactive }: { item: Furniture; elev
       rotation={[0, -item.rotation, 0]}
       onClick={interactive ? (e => { e.stopPropagation(); setSelected(item.id) }) : undefined}
     >
-      {getShape()}
+      <Suspense fallback={<FallbackBox w={w} h={h} d={d} color={color} />}>
+        <GltfModel kind={item.kind as ModelKind} w={w} h={h} d={d} />
+      </Suspense>
+
       {isSelected && (
         <>
-          {/* Selection outline via slightly bigger wireframe */}
-          <mesh>
+          <mesh position={[0, h / 2, 0]}>
             <boxGeometry args={[w + 0.04, h + 0.04, d + 0.04]} />
             <meshStandardMaterial color="#60a5fa" wireframe transparent opacity={0.5} />
           </mesh>
