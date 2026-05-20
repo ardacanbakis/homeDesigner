@@ -1,8 +1,10 @@
 import { create } from 'zustand'
+import { temporal } from 'zundo'
 import { nanoid } from 'nanoid'
 import { CATALOG_MAP } from '../geometry/catalog'
 import { saveDesign, loadDesign } from '../persistence/storage'
-import type { Wall, Furniture, FurnitureKind, Vec2, Design, ViewMode, ActiveTool } from './types'
+import { wallLength } from '../geometry/walls'
+import type { Wall, Opening, Furniture, FurnitureKind, Vec2, Design, ViewMode, ActiveTool } from './types'
 
 type State = {
   design: Design
@@ -18,10 +20,16 @@ type Actions = {
   setActiveTool: (t: ActiveTool) => void
   setSelected: (id: string | null) => void
   toggleSnap: () => void
+  undo: () => void
+  redo: () => void
 
   addWall: (a: Vec2, b: Vec2) => void
   moveWallEndpoint: (wallId: string, endpoint: 'a' | 'b', pos: Vec2) => void
   deleteWall: (id: string) => void
+
+  addOpening: (wallId: string, type: Opening['type']) => void
+  updateOpening: (id: string, patch: Partial<Omit<Opening, 'id' | 'wallId'>>) => void
+  deleteOpening: (id: string) => void
 
   addFurniture: (kind: FurnitureKind, position: Vec2) => void
   moveFurniture: (id: string, position: Vec2) => void
@@ -46,117 +54,151 @@ function freshDesign(): Design {
   return saved ?? { ...EMPTY_DESIGN }
 }
 
-export const useDesignStore = create<State & Actions>((set, get) => ({
-  design: freshDesign(),
-  viewMode: '2d',
-  activeTool: 'select',
-  selectedId: null,
-  snapEnabled: true,
-  gridSize: 20,
+function commit(design: Design): Design {
+  saveDesign(design)
+  return design
+}
 
-  setViewMode: m => set({ viewMode: m }),
-  setActiveTool: t => set({ activeTool: t }),
-  setSelected: id => set({ selectedId: id }),
-  toggleSnap: () => set(s => ({ snapEnabled: !s.snapEnabled })),
+const useDesignStoreBase = create<State & Actions>()(
+  temporal(
+    (set, get) => ({
+      design: freshDesign(),
+      viewMode: '2d' as ViewMode,
+      activeTool: 'select' as ActiveTool,
+      selectedId: null as string | null,
+      snapEnabled: true,
+      gridSize: 20,
 
-  addWall: (a, b) => {
-    const wall: Wall = { id: nanoid(), a, b, thickness: 15, height: 260 }
-    set(s => {
-      const design = { ...s.design, walls: [...s.design.walls, wall] }
-      saveDesign(design)
-      return { design }
-    })
-  },
+      setViewMode: m => set({ viewMode: m }),
+      setActiveTool: t => set({ activeTool: t }),
+      setSelected: id => set({ selectedId: id }),
+      toggleSnap: () => set(s => ({ snapEnabled: !s.snapEnabled })),
 
-  moveWallEndpoint: (wallId, endpoint, pos) => {
-    set(s => {
-      const walls = s.design.walls.map(w =>
-        w.id === wallId ? { ...w, [endpoint]: pos } : w
-      )
-      const design = { ...s.design, walls }
-      saveDesign(design)
-      return { design }
-    })
-  },
+      undo: () => {
+        useDesignStoreBase.temporal.getState().undo()
+        saveDesign(get().design)
+      },
+      redo: () => {
+        useDesignStoreBase.temporal.getState().redo()
+        saveDesign(get().design)
+      },
 
-  deleteWall: id => {
-    set(s => {
-      const walls = s.design.walls.filter(w => w.id !== id)
-      const design = { ...s.design, walls }
-      saveDesign(design)
-      return { design, selectedId: s.selectedId === id ? null : s.selectedId }
-    })
-  },
+      // ── Walls ──────────────────────────────────────────────────────────────
+      addWall: (a, b) => {
+        const wall: Wall = { id: nanoid(), a, b, thickness: 15, height: 260 }
+        set(s => ({ design: commit({ ...s.design, walls: [...s.design.walls, wall] }) }))
+      },
 
-  addFurniture: (kind, position) => {
-    const entry = CATALOG_MAP[kind]
-    const item: Furniture = {
-      id: nanoid(),
-      kind,
-      position,
-      rotation: 0,
-      size: { ...entry.size },
-      color: entry.color,
-    }
-    set(s => {
-      const design = { ...s.design, furniture: [...s.design.furniture, item] }
-      saveDesign(design)
-      return { design, selectedId: item.id }
-    })
-  },
+      moveWallEndpoint: (wallId, endpoint, pos) => {
+        set(s => ({
+          design: commit({
+            ...s.design,
+            walls: s.design.walls.map(w => w.id === wallId ? { ...w, [endpoint]: pos } : w),
+          }),
+        }))
+      },
 
-  moveFurniture: (id, position) => {
-    set(s => {
-      const furniture = s.design.furniture.map(f => f.id === id ? { ...f, position } : f)
-      const design = { ...s.design, furniture }
-      saveDesign(design)
-      return { design }
-    })
-  },
+      deleteWall: id => {
+        set(s => ({
+          design: commit({
+            ...s.design,
+            walls: s.design.walls.filter(w => w.id !== id),
+            openings: s.design.openings.filter(o => o.wallId !== id),
+          }),
+          selectedId: s.selectedId === id ? null : s.selectedId,
+        }))
+      },
 
-  rotateFurniture: (id, delta) => {
-    set(s => {
-      const furniture = s.design.furniture.map(f =>
-        f.id === id ? { ...f, rotation: f.rotation + delta } : f
-      )
-      const design = { ...s.design, furniture }
-      saveDesign(design)
-      return { design }
-    })
-  },
+      // ── Openings ────────────────────────────────────────────────────────────
+      addOpening: (wallId, type) => {
+        const wall = get().design.walls.find(w => w.id === wallId)
+        if (!wall) return
+        const len = wallLength(wall)
+        const width = type === 'door' ? 90 : 100
+        const height = type === 'door' ? 210 : 120
+        const sillHeight = type === 'door' ? 0 : 90
+        const offset = Math.max(0, (len - width) / 2)
+        const opening: Opening = { id: nanoid(), wallId, type, offset, width, height, sillHeight }
+        set(s => ({
+          design: commit({ ...s.design, openings: [...s.design.openings, opening] }),
+          selectedId: opening.id,
+        }))
+      },
 
-  deleteFurniture: id => {
-    set(s => {
-      const furniture = s.design.furniture.filter(f => f.id !== id)
-      const design = { ...s.design, furniture }
-      saveDesign(design)
-      return { design, selectedId: s.selectedId === id ? null : s.selectedId }
-    })
-  },
+      updateOpening: (id, patch) => {
+        set(s => ({
+          design: commit({
+            ...s.design,
+            openings: s.design.openings.map(o => o.id === id ? { ...o, ...patch } : o),
+          }),
+        }))
+      },
 
-  updateFurnitureSize: (id, size) => {
-    set(s => {
-      const furniture = s.design.furniture.map(f =>
-        f.id === id ? { ...f, size: { ...f.size, ...size } } : f
-      )
-      const design = { ...s.design, furniture }
-      saveDesign(design)
-      return { design }
-    })
-  },
+      deleteOpening: id => {
+        set(s => ({
+          design: commit({ ...s.design, openings: s.design.openings.filter(o => o.id !== id) }),
+          selectedId: s.selectedId === id ? null : s.selectedId,
+        }))
+      },
 
-  loadDesign: design => {
-    saveDesign(design)
-    set({ design, selectedId: null })
-  },
+      // ── Furniture ──────────────────────────────────────────────────────────
+      addFurniture: (kind, position) => {
+        const entry = CATALOG_MAP[kind]
+        const item: Furniture = { id: nanoid(), kind, position, rotation: 0, size: { ...entry.size }, color: entry.color }
+        set(s => ({
+          design: commit({ ...s.design, furniture: [...s.design.furniture, item] }),
+          selectedId: item.id,
+        }))
+      },
 
-  newDesign: () => {
-    const design = { ...EMPTY_DESIGN }
-    saveDesign(design)
-    set({ design, selectedId: null })
-  },
+      moveFurniture: (id, position) => {
+        set(s => ({
+          design: commit({ ...s.design, furniture: s.design.furniture.map(f => f.id === id ? { ...f, position } : f) }),
+        }))
+      },
 
-  save: () => {
-    saveDesign(get().design)
-  },
-}))
+      rotateFurniture: (id, delta) => {
+        set(s => ({
+          design: commit({ ...s.design, furniture: s.design.furniture.map(f => f.id === id ? { ...f, rotation: f.rotation + delta } : f) }),
+        }))
+      },
+
+      deleteFurniture: id => {
+        set(s => ({
+          design: commit({ ...s.design, furniture: s.design.furniture.filter(f => f.id !== id) }),
+          selectedId: s.selectedId === id ? null : s.selectedId,
+        }))
+      },
+
+      updateFurnitureSize: (id, size) => {
+        set(s => ({
+          design: commit({ ...s.design, furniture: s.design.furniture.map(f => f.id === id ? { ...f, size: { ...f.size, ...size } } : f) }),
+        }))
+      },
+
+      // ── Persistence ────────────────────────────────────────────────────────
+      loadDesign: design => {
+        saveDesign(design)
+        set({ design, selectedId: null })
+      },
+
+      newDesign: () => {
+        const design = { ...EMPTY_DESIGN }
+        saveDesign(design)
+        set({ design, selectedId: null })
+      },
+
+      save: () => saveDesign(get().design),
+    }),
+    // Only track `design` in undo history, not UI state
+    { partialize: (s: State & Actions) => ({ design: s.design }) }
+  )
+)
+
+export const useDesignStore = useDesignStoreBase
+
+/** Reactive hook for undo/redo state (pastStates / futureStates lengths). */
+import { useStore } from 'zustand'
+export function useTemporalStore() {
+  return useStore(useDesignStoreBase.temporal)
+}

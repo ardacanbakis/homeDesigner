@@ -34,8 +34,8 @@ function cmToStagePos(cm: Vec2, offset: Vec2, scale: number): { x: number; y: nu
 export function Canvas2D({ width, height }: { width: number; height: number }) {
   const {
     design, activeTool, selectedId, snapEnabled, gridSize,
-    setSelected, addWall, moveWallEndpoint, deleteWall, addFurniture, moveFurniture,
-    deleteFurniture, rotateFurniture, setActiveTool,
+    setSelected, addWall, moveWallEndpoint, deleteWall, deleteOpening,
+    addFurniture, moveFurniture, deleteFurniture, rotateFurniture, setActiveTool,
   } = useDesignStore()
 
   const stageRef = useRef<Konva.Stage>(null)
@@ -58,10 +58,11 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
         setDrawStart(null)
       }
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) {
-        const isWall = design.walls.some(w => w.id === selectedId)
-        const isFurniture = design.furniture.some(f => f.id === selectedId)
-        if (isWall) deleteWall(selectedId)
-        if (isFurniture) deleteFurniture(selectedId)
+        const tag = (e.target as HTMLElement).tagName
+        if (tag === 'INPUT' || tag === 'TEXTAREA') return
+        if (design.walls.some(w => w.id === selectedId)) deleteWall(selectedId)
+        else if (design.furniture.some(f => f.id === selectedId)) deleteFurniture(selectedId)
+        else if (design.openings.some(o => o.id === selectedId)) deleteOpening(selectedId)
       }
       if ((e.key === 'r' || e.key === 'R') && selectedId) {
         const isFurniture = design.furniture.some(f => f.id === selectedId)
@@ -300,6 +301,60 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
                     listening={false}
                   />
                 )}
+
+                {/* Openings (doors/windows) drawn along this wall */}
+                {design.openings
+                  .filter(o => o.wallId === wall.id)
+                  .map(op => {
+                    const opSeleted = selectedId === op.id
+                    const wallT = Math.max(4, (wall.thickness / CM_PER_CELL) * GRID_SIZE_PX * scale)
+                    const opOffPx = cmToPx(op.offset, scale)
+                    const opWPx = cmToPx(op.width, scale)
+                    const isDoor = op.type === 'door'
+                    return (
+                      <Group
+                        key={op.id}
+                        x={ap.x}
+                        y={ap.y}
+                        rotation={(wallAngle(wall) * 180) / Math.PI}
+                        onClick={e => { e.cancelBubble = true; setSelected(op.id) }}
+                      >
+                        {/* White gap over wall */}
+                        <Rect
+                          x={opOffPx}
+                          y={-wallT / 2}
+                          width={opWPx}
+                          height={wallT}
+                          fill={opSeleted ? '#dbeafe' : '#f8fafc'}
+                          stroke={opSeleted ? '#3b82f6' : '#94a3b8'}
+                          strokeWidth={1}
+                        />
+                        {isDoor ? (
+                          /* Door: quarter-circle arc representing swing */
+                          <Line
+                            points={[opOffPx, -wallT / 2, opOffPx, -wallT / 2 - opWPx * 0.85]}
+                            stroke={opSeleted ? '#3b82f6' : '#64748b'}
+                            strokeWidth={1}
+                            listening={false}
+                          />
+                        ) : (
+                          /* Window: three lines across gap */
+                          [0.25, 0.5, 0.75].map(t => (
+                            <Line
+                              key={t}
+                              points={[
+                                opOffPx + opWPx * t, -wallT / 2,
+                                opOffPx + opWPx * t, wallT / 2,
+                              ]}
+                              stroke={opSeleted ? '#3b82f6' : '#64748b'}
+                              strokeWidth={1}
+                              listening={false}
+                            />
+                          ))
+                        )}
+                      </Group>
+                    )
+                  })}
               </Group>
             )
           })}
