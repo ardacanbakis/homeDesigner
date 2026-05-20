@@ -1,23 +1,22 @@
-import { useMemo } from 'react'
 import type { Wall } from '../store/types'
 import { wallAngle, wallLength } from '../geometry/walls'
+import { m } from './units'
+import { useDesignStore } from '../store/design'
 
-const WALL_COLOR = '#4a5568'
+const WALL_COLOR = '#cfd3da'
 const WALL_SELECTED_COLOR = '#60a5fa'
 
-type Props = { walls: Wall[]; selectedId?: string | null }
-
 function WallMesh({ wall, isSelected }: { wall: Wall; isSelected: boolean }) {
+  const setSelected = useDesignStore(s => s.setSelected)
   const len = wallLength(wall)
   const angle = wallAngle(wall)
 
-  // Center of wall in 3D (Y-up, X-right, Z-depth)
-  // Store uses x,y as floor plane; Three.js uses x,z as floor plane
-  const cx = ((wall.a.x + wall.b.x) / 2) / 10  // divide by 10: cm → "three units" (1 unit = 1 cm effectively, but scaled)
-  const cz = ((wall.a.y + wall.b.y) / 2) / 10
-  const wallH = wall.height / 10
-  const wallT = wall.thickness / 10
-  const wallL = len / 10
+  // Store x,y -> Three x,z (floor plane). Y is up.
+  const cx = m((wall.a.x + wall.b.x) / 2)
+  const cz = m((wall.a.y + wall.b.y) / 2)
+  const wallH = m(wall.height)
+  const wallT = m(wall.thickness)
+  const wallL = m(len)
 
   return (
     <mesh
@@ -25,23 +24,26 @@ function WallMesh({ wall, isSelected }: { wall: Wall; isSelected: boolean }) {
       rotation={[0, -angle, 0]}
       castShadow
       receiveShadow
+      onClick={e => {
+        e.stopPropagation()
+        setSelected(wall.id)
+      }}
     >
       <boxGeometry args={[wallL, wallH, wallT]} />
       <meshStandardMaterial
         color={isSelected ? WALL_SELECTED_COLOR : WALL_COLOR}
-        roughness={0.7}
-        metalness={0.1}
+        roughness={0.85}
+        metalness={0}
       />
     </mesh>
   )
 }
 
-export function Walls3D({ walls, selectedId }: Props) {
-  const wallList = useMemo(() => walls, [walls])
-
+export function Walls3D({ walls }: { walls: Wall[] }) {
+  const selectedId = useDesignStore(s => s.selectedId)
   return (
     <group>
-      {wallList.map(w => (
+      {walls.map(w => (
         <WallMesh key={w.id} wall={w} isSelected={selectedId === w.id} />
       ))}
     </group>

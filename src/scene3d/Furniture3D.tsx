@@ -1,22 +1,22 @@
-import { useRef } from 'react'
 import { Html } from '@react-three/drei'
 import type { Furniture } from '../store/types'
 import { CATALOG_MAP } from '../geometry/catalog'
 import { useDesignStore } from '../store/design'
+import { m } from './units'
 
 function FurnitureItem({ item }: { item: Furniture }) {
   const { selectedId, setSelected } = useDesignStore()
   const isSelected = selectedId === item.id
   const cat = CATALOG_MAP[item.kind]
 
-  // Scale cm → three units (divide by 10 for readability)
-  const w = item.size.w / 10
-  const d = item.size.d / 10
-  const h = item.size.h / 10
+  // cm -> meters (three world units)
+  const w = m(item.size.w)
+  const d = m(item.size.d)
+  const h = m(item.size.h)
 
-  // Position: store x,y are floor plane; Three.js uses x,z
-  const x = item.position.x / 10 + w / 2
-  const z = item.position.y / 10 + d / 2
+  // Store x,y are floor plane (top-left of footprint); Three uses x,z. Center the mesh.
+  const x = m(item.position.x) + w / 2
+  const z = m(item.position.y) + d / 2
   const y = h / 2
 
   const color = item.color ?? cat.color
@@ -188,11 +188,11 @@ function FurnitureItem({ item }: { item: Furniture }) {
         <>
           {/* Selection outline via slightly bigger wireframe */}
           <mesh>
-            <boxGeometry args={[w + 0.3, h + 0.3, d + 0.3]} />
-            <meshStandardMaterial color="#60a5fa" wireframe transparent opacity={0.4} />
+            <boxGeometry args={[w + 0.04, h + 0.04, d + 0.04]} />
+            <meshStandardMaterial color="#60a5fa" wireframe transparent opacity={0.5} />
           </mesh>
           <Html
-            position={[0, h + 2, 0]}
+            position={[0, h + 0.25, 0]}
             center
             style={{ pointerEvents: 'none' }}
           >
