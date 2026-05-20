@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Stage, Layer, Line, Rect, Circle, Text, Group, Arrow } from 'react-konva'
 import type Konva from 'konva'
-import { useDesignStore } from '../store/design'
+import { useDesignStore, useActiveFloor } from '../store/design'
 import { snapPoint, wallLength, wallAngle } from '../geometry/walls'
 import { CATALOG_MAP } from '../geometry/catalog'
 import type { Vec2 } from '../store/types'
@@ -34,10 +34,17 @@ function cmToStagePos(cm: Vec2, offset: Vec2, scale: number): { x: number; y: nu
 
 export function Canvas2D({ width, height }: { width: number; height: number }) {
   const {
-    design, activeTool, selectedId, snapEnabled, gridSize,
+    design, activeFloorId, activeTool, selectedId, snapEnabled, gridSize,
     setSelected, addWall, moveWallEndpoint, deleteWall, deleteOpening,
     addFurniture, moveFurniture, deleteFurniture, rotateFurniture, setActiveTool,
   } = useDesignStore()
+
+  const floor = useActiveFloor()
+  // Walls of the floor directly below, shown faintly so rooms can be aligned.
+  const ghostWalls = (() => {
+    const idx = design.floors.findIndex(f => f.id === activeFloorId)
+    return idx > 0 ? design.floors[idx - 1].walls : []
+  })()
 
   const stageRef = useRef<Konva.Stage>(null)
   const [scale, setScale] = useState(1)
@@ -61,12 +68,12 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) {
         const tag = (e.target as HTMLElement).tagName
         if (tag === 'INPUT' || tag === 'TEXTAREA') return
-        if (design.walls.some(w => w.id === selectedId)) deleteWall(selectedId)
-        else if (design.furniture.some(f => f.id === selectedId)) deleteFurniture(selectedId)
-        else if (design.openings.some(o => o.id === selectedId)) deleteOpening(selectedId)
+        if (floor.walls.some(w => w.id === selectedId)) deleteWall(selectedId)
+        else if (floor.furniture.some(f => f.id === selectedId)) deleteFurniture(selectedId)
+        else if (floor.openings.some(o => o.id === selectedId)) deleteOpening(selectedId)
       }
       if ((e.key === 'r' || e.key === 'R') && selectedId) {
-        const isFurniture = design.furniture.some(f => f.id === selectedId)
+        const isFurniture = floor.furniture.some(f => f.id === selectedId)
         if (isFurniture) rotateFurniture(selectedId, Math.PI / 2)
       }
     }
@@ -83,8 +90,8 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
 
   const getSnappedCmPos = useCallback((stagePos: Vec2): Vec2 => {
     const cm = stagePosToCm(stagePos.x, stagePos.y, offset, scale)
-    return snapEnabled ? snapPoint(cm, design.walls, gridSize) : cm
-  }, [offset, scale, snapEnabled, design.walls, gridSize])
+    return snapEnabled ? snapPoint(cm, floor.walls, gridSize) : cm
+  }, [offset, scale, snapEnabled, floor.walls, gridSize])
 
   // Zoom
   const handleWheel = useCallback((e: Konva.KonvaEventObject<WheelEvent>) => {
@@ -242,9 +249,29 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
           {gridLines()}
         </Layer>
 
+        {/* Ghost of the floor below, to help align rooms */}
+        {ghostWalls.length > 0 && (
+          <Layer listening={false}>
+            {ghostWalls.map(gw => {
+              const ap = cmToStagePos(gw.a, offset, scale)
+              const bp = cmToStagePos(gw.b, offset, scale)
+              return (
+                <Line
+                  key={`ghost-${gw.id}`}
+                  points={[ap.x, ap.y, bp.x, bp.y]}
+                  stroke="#3b4252"
+                  strokeWidth={Math.max(1, cmToPx(gw.thickness, scale))}
+                  lineCap="square"
+                  dash={[6, 6]}
+                />
+              )
+            })}
+          </Layer>
+        )}
+
         {/* Walls layer */}
         <Layer>
-          {design.walls.map(wall => {
+          {floor.walls.map(wall => {
             const ap = cmToStagePos(wall.a, offset, scale)
             const bp = cmToStagePos(wall.b, offset, scale)
             const isSelected = selectedId === wall.id
@@ -277,7 +304,7 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
                       draggable
                       onDragMove={de => {
                         const np = stagePosToCm(de.target.x(), de.target.y(), offset, scale)
-                        const snapped = snapEnabled ? snapPoint(np, design.walls, gridSize) : np
+                        const snapped = snapEnabled ? snapPoint(np, floor.walls, gridSize) : np
                         moveWallEndpoint(wall.id, ep as 'a' | 'b', snapped)
                         de.target.x(cmToStagePos(snapped, offset, scale).x)
                         de.target.y(cmToStagePos(snapped, offset, scale).y)
@@ -300,7 +327,7 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
                 )}
 
                 {/* Openings (doors/windows) drawn along this wall */}
-                {design.openings
+                {floor.openings
                   .filter(o => o.wallId === wall.id)
                   .map(op => {
                     const opSeleted = selectedId === op.id
@@ -376,7 +403,7 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
 
         {/* Furniture layer */}
         <Layer>
-          {design.furniture.map(f => {
+          {floor.furniture.map(f => {
             const cat = CATALOG_MAP[f.kind]
             const cx = cmToStagePos({ x: f.position.x + f.size.w / 2, y: f.position.y + f.size.d / 2 }, offset, scale)
             const pw = cmToPx(f.size.w, scale)
@@ -448,7 +475,7 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
       </Stage>
 
       {/* Hint overlays */}
-      {design.walls.length === 0 && design.furniture.length === 0 && (
+      {floor.walls.length === 0 && floor.furniture.length === 0 && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="text-center text-gray-600">
             <div className="text-4xl mb-3">🏠</div>

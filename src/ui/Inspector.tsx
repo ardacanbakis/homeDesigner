@@ -1,17 +1,18 @@
-import { useDesignStore } from '../store/design'
+import { useDesignStore, useActiveFloor } from '../store/design'
 import { CATALOG_MAP } from '../geometry/catalog'
 import { wallLength } from '../geometry/walls'
 
 export function Inspector() {
   const {
-    design, selectedId, setSelected,
+    selectedId, setSelected,
     deleteWall, setWallLength, updateWall, addOpening, updateOpening, deleteOpening,
     deleteFurniture, rotateFurniture, updateFurnitureSize,
   } = useDesignStore()
+  const floor = useActiveFloor()
 
-  const wall = design.walls.find(w => w.id === selectedId)
-  const opening = design.openings.find(o => o.id === selectedId)
-  const furniture = design.furniture.find(f => f.id === selectedId)
+  const wall = floor.walls.find(w => w.id === selectedId)
+  const opening = floor.openings.find(o => o.id === selectedId)
+  const furniture = floor.furniture.find(f => f.id === selectedId)
 
   if (!selectedId || (!wall && !opening && !furniture)) {
     return (
@@ -69,7 +70,7 @@ export function Inspector() {
                   🪟 Window
                 </button>
               </div>
-              {design.openings.filter(o => o.wallId === wall.id).map(op => (
+              {floor.openings.filter(o => o.wallId === wall.id).map(op => (
                 <div
                   key={op.id}
                   onClick={() => setSelected(op.id)}
@@ -93,7 +94,7 @@ export function Inspector() {
 
         {/* ── Opening ──────────────────────────────────────────── */}
         {opening && (() => {
-          const parentWall = design.walls.find(w => w.id === opening.wallId)
+          const parentWall = floor.walls.find(w => w.id === opening.wallId)
           const maxOffset = parentWall ? Math.max(0, wallLength(parentWall) - opening.width) : 9999
           return (
             <>

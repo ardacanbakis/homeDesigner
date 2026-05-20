@@ -2,7 +2,7 @@ import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls, Grid, Environment, ContactShadows } from '@react-three/drei'
 import { Suspense, useCallback, useEffect } from 'react'
 import * as THREE from 'three'
-import { useDesignStore } from '../store/design'
+import { useDesignStore, floorElevations } from '../store/design'
 import { Walls3D } from './Walls3D'
 import { Furniture3D } from './Furniture3D'
 import { designBounds, m } from './units'
@@ -50,13 +50,15 @@ function useFrameDesign() {
 
 function SceneContent() {
   const design = useDesignStore(s => s.design)
+  const activeFloorId = useDesignStore(s => s.activeFloorId)
   const setSelected = useDesignStore(s => s.setSelected)
   const controls = useThree(s => s.controls)
   const frame = useFrameDesign()
+  const elevations = floorElevations(design.floors)
 
   // Re-frame on first mount, when OrbitControls becomes available, and
-  // whenever the set of walls/furniture changes.
-  const signature = `${design.walls.length}:${design.furniture.length}`
+  // whenever the geometry meaningfully changes.
+  const signature = design.floors.map(f => `${f.walls.length}/${f.furniture.length}`).join('|')
   useEffect(() => {
     frame(design)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -129,8 +131,15 @@ function SceneContent() {
         resolution={1024}
       />
 
-      <Walls3D walls={design.walls} />
-      <Furniture3D furniture={design.furniture} />
+      {design.floors.map((floor, i) => {
+        const interactive = floor.id === activeFloorId
+        return (
+          <group key={floor.id}>
+            <Walls3D walls={floor.walls} openings={floor.openings} elevation={elevations[i]} interactive={interactive} />
+            <Furniture3D furniture={floor.furniture} elevation={elevations[i]} interactive={interactive} />
+          </group>
+        )
+      })}
     </>
   )
 }

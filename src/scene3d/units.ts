@@ -15,7 +15,7 @@ export type Bounds = {
   maxY: number
 }
 
-/** Bounding box of all walls + furniture, in centimeters. Null if design is empty. */
+/** Bounding box across all floors (incl. floor elevations), in centimeters. Null if empty. */
 export function designBounds(design: Design): Bounds | null {
   let minX = Infinity
   let maxX = -Infinity
@@ -24,24 +24,27 @@ export function designBounds(design: Design): Bounds | null {
   let maxY = 0
   let has = false
 
-  for (const w of design.walls) {
-    has = true
-    for (const p of [w.a, w.b]) {
-      minX = Math.min(minX, p.x)
-      maxX = Math.max(maxX, p.x)
-      minZ = Math.min(minZ, p.y)
-      maxZ = Math.max(maxZ, p.y)
+  let elevation = 0
+  for (const floor of design.floors) {
+    for (const w of floor.walls) {
+      has = true
+      for (const p of [w.a, w.b]) {
+        minX = Math.min(minX, p.x)
+        maxX = Math.max(maxX, p.x)
+        minZ = Math.min(minZ, p.y)
+        maxZ = Math.max(maxZ, p.y)
+      }
+      maxY = Math.max(maxY, elevation + w.height)
     }
-    maxY = Math.max(maxY, w.height)
-  }
-
-  for (const f of design.furniture) {
-    has = true
-    minX = Math.min(minX, f.position.x)
-    maxX = Math.max(maxX, f.position.x + f.size.w)
-    minZ = Math.min(minZ, f.position.y)
-    maxZ = Math.max(maxZ, f.position.y + f.size.d)
-    maxY = Math.max(maxY, f.size.h)
+    for (const f of floor.furniture) {
+      has = true
+      minX = Math.min(minX, f.position.x)
+      maxX = Math.max(maxX, f.position.x + f.size.w)
+      minZ = Math.min(minZ, f.position.y)
+      maxZ = Math.max(maxZ, f.position.y + f.size.d)
+      maxY = Math.max(maxY, elevation + f.size.h)
+    }
+    elevation += floor.height
   }
 
   if (!has) return null

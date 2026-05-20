@@ -1,10 +1,14 @@
 import { useEffect } from 'react'
-import { useDesignStore, useTemporalStore } from '../store/design'
+import { useDesignStore, useTemporalStore, useActiveFloor } from '../store/design'
 import { exportJSON, importJSON } from '../persistence/storage'
 
 export function Toolbar() {
-  const { viewMode, setViewMode, activeTool, setActiveTool, newDesign, loadDesign, design, snapEnabled, toggleSnap, undo, redo } =
-    useDesignStore()
+  const {
+    viewMode, setViewMode, activeTool, setActiveTool, newDesign, loadDesign, design,
+    snapEnabled, toggleSnap, undo, redo,
+    activeFloorId, setActiveFloor, addFloor, deleteFloor,
+  } = useDesignStore()
+  const floor = useActiveFloor()
   const { pastStates, futureStates } = useTemporalStore()
   const canUndo = pastStates.length > 0
   const canRedo = futureStates.length > 0
@@ -67,6 +71,29 @@ export function Toolbar() {
         </>
       )}
 
+      {/* Floor switcher */}
+      <div className="w-px h-6 bg-gray-600 mx-1" />
+      <div className="flex items-center gap-1">
+        <span className="text-[10px] text-gray-500 uppercase">Floor</span>
+        <select
+          value={activeFloorId}
+          onChange={e => setActiveFloor(e.target.value)}
+          className="bg-gray-800 text-gray-200 text-xs px-2 py-1 rounded border border-gray-600 max-w-36"
+        >
+          {design.floors.map(f => (
+            <option key={f.id} value={f.id}>{f.name}</option>
+          ))}
+        </select>
+        <button onClick={addFloor} title="Add floor above"
+          className="px-2 py-1 text-xs bg-gray-800 text-gray-300 hover:bg-gray-700 rounded border border-gray-600">+</button>
+        <button
+          onClick={() => { if (design.floors.length > 1 && confirm(`Delete "${floor.name}" and everything on it?`)) deleteFloor(activeFloorId) }}
+          disabled={design.floors.length <= 1}
+          title="Delete current floor"
+          className={`px-2 py-1 text-xs rounded border ${design.floors.length > 1 ? 'bg-gray-800 text-gray-300 hover:bg-gray-700 border-gray-600' : 'bg-gray-900 text-gray-600 border-gray-700 cursor-not-allowed'}`}
+        >🗑</button>
+      </div>
+
       {/* Undo / Redo */}
       <div className="w-px h-6 bg-gray-600 mx-1" />
       <div className="flex rounded overflow-hidden border border-gray-600">
@@ -86,7 +113,7 @@ export function Toolbar() {
       <button onClick={handleNew} className="px-3 py-1 text-xs bg-red-900/50 text-red-300 hover:bg-red-900/70 rounded border border-red-700">New</button>
 
       <div className="text-xs text-gray-600 ml-1">
-        {design.walls.length}w · {design.openings.length}o · {design.furniture.length}f
+        {floor.walls.length}w · {floor.openings.length}o · {floor.furniture.length}f
       </div>
     </div>
   )

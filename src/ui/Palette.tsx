@@ -4,7 +4,7 @@ import type { CatalogEntry } from '../geometry/catalog'
 import { useDesignStore } from '../store/design'
 import type { FurnitureKind } from '../store/types'
 
-const CATEGORIES = ['bedroom', 'kitchen', 'living', 'bathroom', 'office'] as const
+const CATEGORIES = ['bedroom', 'kitchen', 'living', 'bathroom', 'office', 'structure'] as const
 
 export function Palette() {
   const { viewMode, addFurniture, setActiveTool } = useDesignStore()

@@ -101,12 +101,15 @@ src/
 
 ## Roadmap
 
-Not yet implemented (open for follow-ups):
+Done:
 
 - **Doors & windows** — openings cut into the wall extrusion via `THREE.Shape` + `Path` holes.
-- **Multi-floor + stairs** — `Design` becomes `{ floors: Floor[] }`; stair preset links two floors and renders as a stepped box.
+- **Undo / redo** — `zundo` temporal middleware, tracking only the design.
+- **Multi-floor + stairs** — `Design` holds `floors: Floor[]`; a floor switcher in the toolbar edits one floor at a time (with the floor below ghosted in 2D), and all floors render stacked at their real heights in 3D. Stairs are a catalog preset rendered as a stepped 3D run.
+
+Not yet implemented (open for follow-ups):
+
 - **GLB models** — replace primitives with CC0 glTF assets (Poly Haven, Kenney, Quaternius), preloaded with drei's `useGLTF`.
-- **Undo / redo** — wire `zundo` into the Zustand store.
 - **Room detection** — derive rooms from wall loops (the blueprint3d-style cycle algorithm), then show room labels and area.
 - **Mobile / touch** — currently desktop-first.
 

@@ -3,7 +3,7 @@ import type { FurnitureKind } from '../store/types'
 export type CatalogEntry = {
   kind: FurnitureKind
   label: string
-  category: 'bedroom' | 'kitchen' | 'living' | 'bathroom' | 'office'
+  category: 'bedroom' | 'kitchen' | 'living' | 'bathroom' | 'office' | 'structure'
   color: string
   size: { w: number; d: number; h: number } // cm
   icon: string
@@ -29,6 +29,8 @@ export const CATALOG: CatalogEntry[] = [
   { kind: 'bathtub', label: 'Bathtub', category: 'bathroom', color: '#E0E8F0', size: { w: 80, d: 170, h: 60 }, icon: '🛁' },
   // Office
   { kind: 'desk', label: 'Desk', category: 'office', color: '#8B7355', size: { w: 140, d: 70, h: 75 }, icon: '🖥️' },
+  // Structure
+  { kind: 'stairs', label: 'Stairs', category: 'structure', color: '#9c8e7a', size: { w: 100, d: 280, h: 280 }, icon: '🪜' },
 ]
 
 export const CATALOG_MAP = Object.fromEntries(CATALOG.map(e => [e.kind, e])) as Record<FurnitureKind, CatalogEntry>

@@ -4,9 +4,9 @@ import { CATALOG_MAP } from '../geometry/catalog'
 import { useDesignStore } from '../store/design'
 import { m } from './units'
 
-function FurnitureItem({ item }: { item: Furniture }) {
+function FurnitureItem({ item, elevation, interactive }: { item: Furniture; elevation: number; interactive: boolean }) {
   const { selectedId, setSelected } = useDesignStore()
-  const isSelected = selectedId === item.id
+  const isSelected = interactive && selectedId === item.id
   const cat = CATALOG_MAP[item.kind]
 
   // cm -> meters (three world units)
@@ -17,7 +17,7 @@ function FurnitureItem({ item }: { item: Furniture }) {
   // Store x,y are floor plane (top-left of footprint); Three uses x,z. Center the mesh.
   const x = m(item.position.x) + w / 2
   const z = m(item.position.y) + d / 2
-  const y = h / 2
+  const y = m(elevation) + h / 2
 
   const color = item.color ?? cat.color
 
@@ -167,6 +167,27 @@ function FurnitureItem({ item }: { item: Furniture }) {
             </mesh>
           </>
         )
+      case 'stairs': {
+        // Stepped run climbing from floor to ceiling along +Z (local depth)
+        const steps = 14
+        const stepH = h / steps
+        const stepD = d / steps
+        return (
+          <>
+            {Array.from({ length: steps }).map((_, i) => (
+              <mesh
+                key={i}
+                position={[0, -h / 2 + stepH * (i + 0.5), -d / 2 + stepD * (i + 0.5)]}
+                castShadow
+                receiveShadow
+              >
+                <boxGeometry args={[w, stepH, stepD]} />
+                <meshStandardMaterial color={color} roughness={0.8} />
+              </mesh>
+            ))}
+          </>
+        )
+      }
       default:
         return (
           <mesh position={[0, 0, 0]} castShadow>
@@ -181,7 +202,7 @@ function FurnitureItem({ item }: { item: Furniture }) {
     <group
       position={[x, y, z]}
       rotation={[0, -item.rotation, 0]}
-      onClick={e => { e.stopPropagation(); setSelected(item.id) }}
+      onClick={interactive ? (e => { e.stopPropagation(); setSelected(item.id) }) : undefined}
     >
       {getShape()}
       {isSelected && (
@@ -206,11 +227,15 @@ function FurnitureItem({ item }: { item: Furniture }) {
   )
 }
 
-export function Furniture3D({ furniture }: { furniture: Furniture[] }) {
+export function Furniture3D({
+  furniture, elevation, interactive = true,
+}: {
+  furniture: Furniture[]; elevation: number; interactive?: boolean
+}) {
   return (
     <group>
       {furniture.map(f => (
-        <FurnitureItem key={f.id} item={f} />
+        <FurnitureItem key={f.id} item={f} elevation={elevation} interactive={interactive} />
       ))}
     </group>
   )
