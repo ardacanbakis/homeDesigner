@@ -48,10 +48,6 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
   const [drawStart, setDrawStart] = useState<Vec2 | null>(null)
   const [mousePos, setMousePos] = useState<Vec2>({ x: 0, y: 0 })
 
-  // Drag furniture state
-  const [draggingFurnitureId, setDraggingFurnitureId] = useState<string | null>(null)
-  const [dragOffset, setDragOffset] = useState<Vec2>({ x: 0, y: 0 })
-
   // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -151,32 +147,16 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
       return
     }
 
-    if (draggingFurnitureId) {
-      const cm = stagePosToCm(pos.x, pos.y, offset, scale)
-      const snapped = snapEnabled ? {
-        x: Math.round((cm.x - dragOffset.x) / gridSize) * gridSize,
-        y: Math.round((cm.y - dragOffset.y) / gridSize) * gridSize,
-      } : {
-        x: cm.x - dragOffset.x,
-        y: cm.y - dragOffset.y,
-      }
-      moveFurniture(draggingFurnitureId, snapped)
-      return
-    }
-
     const cm = getSnappedCmPos(pos)
     setMousePos(cm)
-  }, [isPanning, panStart, draggingFurnitureId, dragOffset, getStageMousePos, getSnappedCmPos, offset, scale, snapEnabled, gridSize, moveFurniture])
+  }, [isPanning, panStart, getStageMousePos, getSnappedCmPos])
 
   const handleStageMouseUp = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
     if (e.evt.button === 1 || e.evt.button === 2) {
       setIsPanning(false)
       setPanStart(null)
     }
-    if (draggingFurnitureId) {
-      setDraggingFurnitureId(null)
-    }
-  }, [draggingFurnitureId])
+  }, [])
 
   const handleDblClick = useCallback(() => {
     if (activeTool === 'wall') {
@@ -358,17 +338,31 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
                 y={cx.y}
                 rotation={(f.rotation * 180) / Math.PI}
                 draggable={activeTool === 'select'}
-                onMouseDown={e => {
-                  if (activeTool !== 'select') return
-                  e.cancelBubble = true
-                  setSelected(f.id)
-                  const pos = getStageMousePos()
-                  const cm = stagePosToCm(pos.x, pos.y, offset, scale)
-                  setDraggingFurnitureId(f.id)
-                  setDragOffset({ x: cm.x - f.position.x, y: cm.y - f.position.y })
-                }}
-                onMouseUp={() => setDraggingFurnitureId(null)}
+                onMouseDown={e => { e.cancelBubble = true; setSelected(f.id) }}
+                onTap={e => { e.cancelBubble = true; setSelected(f.id) }}
                 onClick={e => { e.cancelBubble = true; setSelected(f.id) }}
+                onDragStart={e => { e.cancelBubble = true; setSelected(f.id) }}
+                onDragMove={e => {
+                  e.cancelBubble = true
+                  const node = e.target
+                  // node x/y is the group center in stage px
+                  const center = stagePosToCm(node.x(), node.y(), offset, scale)
+                  let topLeft = { x: center.x - f.size.w / 2, y: center.y - f.size.d / 2 }
+                  if (snapEnabled) {
+                    topLeft = {
+                      x: Math.round(topLeft.x / gridSize) * gridSize,
+                      y: Math.round(topLeft.y / gridSize) * gridSize,
+                    }
+                    // keep the Konva node in sync with the snapped position
+                    const snappedCenter = cmToStagePos(
+                      { x: topLeft.x + f.size.w / 2, y: topLeft.y + f.size.d / 2 },
+                      offset,
+                      scale
+                    )
+                    node.position(snappedCenter)
+                  }
+                  moveFurniture(f.id, topLeft)
+                }}
               >
                 <Rect
                   x={-pw / 2}
