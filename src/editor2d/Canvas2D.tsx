@@ -6,15 +6,16 @@ import { snapPoint, wallLength, wallAngle } from '../geometry/walls'
 import { CATALOG_MAP } from '../geometry/catalog'
 import type { Vec2 } from '../store/types'
 
-const GRID_SIZE_PX = 20  // pixels per grid cell at scale=1; store works in cm
-const CM_PER_CELL = 20   // 1 grid cell = 20 cm
+const PX_PER_CM = 1   // at scale=1, 1 cm = 1 px
+const MINOR_CM = 5    // minor grid spacing (cm) — matches snap step
+const MAJOR_CM = 50   // major grid spacing (cm)
 
 function pxToCm(px: number, scale: number): number {
-  return (px / scale) * (CM_PER_CELL / GRID_SIZE_PX)
+  return px / (PX_PER_CM * scale)
 }
 
 function cmToPx(cm: number, scale: number): number {
-  return (cm / CM_PER_CELL) * GRID_SIZE_PX * scale
+  return cm * PX_PER_CM * scale
 }
 
 function stagePosToCm(stageX: number, stageY: number, offset: Vec2, scale: number): Vec2 {
@@ -185,39 +186,35 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
     addFurniture(kind, snapped)
   }, [addFurniture, offset, scale, snapEnabled, gridSize])
 
-  // Draw grid lines
+  // Adaptive grid: minor lines every MINOR_CM, major every MAJOR_CM.
+  // Skips a tier when it would be denser than ~6px to stay readable + fast.
   const gridLines = () => {
-    const lines = []
-    const cellPx = GRID_SIZE_PX * scale
-    const startX = offset.x % cellPx
-    const startY = offset.y % cellPx
-    const cols = Math.ceil(width / cellPx) + 1
-    const rows = Math.ceil(height / cellPx) + 1
+    const lines: React.ReactNode[] = []
+    const minX = pxToCm(-offset.x, scale)
+    const maxX = pxToCm(width - offset.x, scale)
+    const minY = pxToCm(-offset.y, scale)
+    const maxY = pxToCm(height - offset.y, scale)
 
-    for (let i = 0; i < cols; i++) {
-      lines.push(
-        <Line
-          key={`v${i}`}
-          name="grid"
-          points={[startX + i * cellPx, 0, startX + i * cellPx, height]}
-          stroke="#2a2a3a"
-          strokeWidth={1}
-          listening={false}
-        />
-      )
+    const drawTier = (stepCm: number, color: string, key: string) => {
+      if (cmToPx(stepCm, scale) < 6) return // too dense, skip this tier
+      const x0 = Math.floor(minX / stepCm) * stepCm
+      for (let cx = x0; cx <= maxX; cx += stepCm) {
+        const sx = cmToPx(cx, scale) + offset.x
+        lines.push(
+          <Line key={`${key}v${cx}`} name="grid" points={[sx, 0, sx, height]} stroke={color} strokeWidth={1} listening={false} />
+        )
+      }
+      const y0 = Math.floor(minY / stepCm) * stepCm
+      for (let cy = y0; cy <= maxY; cy += stepCm) {
+        const sy = cmToPx(cy, scale) + offset.y
+        lines.push(
+          <Line key={`${key}h${cy}`} name="grid" points={[0, sy, width, sy]} stroke={color} strokeWidth={1} listening={false} />
+        )
+      }
     }
-    for (let i = 0; i < rows; i++) {
-      lines.push(
-        <Line
-          key={`h${i}`}
-          name="grid"
-          points={[0, startY + i * cellPx, width, startY + i * cellPx]}
-          stroke="#2a2a3a"
-          strokeWidth={1}
-          listening={false}
-        />
-      )
-    }
+
+    drawTier(MINOR_CM, '#21212e', 'min')
+    drawTier(MAJOR_CM, '#333346', 'maj')
     return lines
   }
 
@@ -260,7 +257,7 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
                 <Line
                   points={[ap.x, ap.y, bp.x, bp.y]}
                   stroke={isSelected ? '#60a5fa' : '#94a3b8'}
-                  strokeWidth={Math.max(2, (wall.thickness / CM_PER_CELL) * GRID_SIZE_PX * scale)}
+                  strokeWidth={Math.max(2, cmToPx(wall.thickness, scale))}
                   lineCap="square"
                   onClick={() => setSelected(wall.id)}
                   onTap={() => setSelected(wall.id)}
@@ -307,7 +304,7 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
                   .filter(o => o.wallId === wall.id)
                   .map(op => {
                     const opSeleted = selectedId === op.id
-                    const wallT = Math.max(4, (wall.thickness / CM_PER_CELL) * GRID_SIZE_PX * scale)
+                    const wallT = Math.max(4, cmToPx(wall.thickness, scale))
                     const opOffPx = cmToPx(op.offset, scale)
                     const opWPx = cmToPx(op.width, scale)
                     const isDoor = op.type === 'door'
@@ -461,11 +458,28 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
         </div>
       )}
 
-      {activeTool === 'wall' && drawStart && (
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-gray-900/80 text-blue-300 text-xs px-3 py-1.5 rounded-full border border-gray-700 pointer-events-none">
-          Click to add point · Double-click or Esc to finish
-        </div>
-      )}
+      {activeTool === 'wall' && drawStart && (() => {
+        const lenCm = Math.hypot(mousePos.x - drawStart.x, mousePos.y - drawStart.y)
+        const mid = cmToStagePos(
+          { x: (drawStart.x + mousePos.x) / 2, y: (drawStart.y + mousePos.y) / 2 },
+          offset,
+          scale
+        )
+        return (
+          <>
+            {/* Big live length readout near the cursor */}
+            <div
+              className="absolute pointer-events-none -translate-x-1/2 -translate-y-1/2 bg-blue-600 text-white font-bold rounded-lg px-3 py-1 shadow-lg tabular-nums"
+              style={{ left: mid.x, top: mid.y - 28, fontSize: 22 }}
+            >
+              {Math.round(lenCm)} cm
+            </div>
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-gray-900/80 text-blue-300 text-xs px-3 py-1.5 rounded-full border border-gray-700 pointer-events-none">
+              Click to add point · Double-click or Esc to finish
+            </div>
+          </>
+        )
+      })()}
 
       <div className="absolute bottom-2 right-3 text-[10px] text-gray-700 pointer-events-none">
         {Math.round(scale * 100)}% · Scroll to zoom · Middle-drag to pan

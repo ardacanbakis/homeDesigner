@@ -25,6 +25,8 @@ type Actions = {
 
   addWall: (a: Vec2, b: Vec2) => void
   moveWallEndpoint: (wallId: string, endpoint: 'a' | 'b', pos: Vec2) => void
+  setWallLength: (wallId: string, length: number) => void
+  updateWall: (wallId: string, patch: Partial<Pick<Wall, 'height' | 'thickness'>>) => void
   deleteWall: (id: string) => void
 
   addOpening: (wallId: string, type: Opening['type']) => void
@@ -67,7 +69,7 @@ const useDesignStoreBase = create<State & Actions>()(
       activeTool: 'select' as ActiveTool,
       selectedId: null as string | null,
       snapEnabled: true,
-      gridSize: 20,
+      gridSize: 5,
 
       setViewMode: m => set({ viewMode: m }),
       setActiveTool: t => set({ activeTool: t }),
@@ -94,6 +96,35 @@ const useDesignStoreBase = create<State & Actions>()(
           design: commit({
             ...s.design,
             walls: s.design.walls.map(w => w.id === wallId ? { ...w, [endpoint]: pos } : w),
+          }),
+        }))
+      },
+
+      // Resize a wall to an exact length, keeping endpoint `a` fixed and moving
+      // `b` along the wall's current direction.
+      setWallLength: (wallId, length) => {
+        set(s => {
+          const wall = s.design.walls.find(w => w.id === wallId)
+          if (!wall || length <= 0) return {}
+          const cur = wallLength(wall)
+          if (cur === 0) return {}
+          const ux = (wall.b.x - wall.a.x) / cur
+          const uy = (wall.b.y - wall.a.y) / cur
+          const b = { x: wall.a.x + ux * length, y: wall.a.y + uy * length }
+          return {
+            design: commit({
+              ...s.design,
+              walls: s.design.walls.map(w => w.id === wallId ? { ...w, b } : w),
+            }),
+          }
+        })
+      },
+
+      updateWall: (wallId, patch) => {
+        set(s => ({
+          design: commit({
+            ...s.design,
+            walls: s.design.walls.map(w => w.id === wallId ? { ...w, ...patch } : w),
           }),
         }))
       },

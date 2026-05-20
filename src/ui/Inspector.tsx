@@ -5,7 +5,7 @@ import { wallLength } from '../geometry/walls'
 export function Inspector() {
   const {
     design, selectedId, setSelected,
-    deleteWall, addOpening, updateOpening, deleteOpening,
+    deleteWall, setWallLength, updateWall, addOpening, updateOpening, deleteOpening,
     deleteFurniture, rotateFurniture, updateFurnitureSize,
   } = useDesignStore()
 
@@ -40,9 +40,18 @@ export function Inspector() {
         {wall && (
           <>
             <Section label="Wall">
-              <Row label="Length" value={`${Math.round(wallLength(wall))} cm`} />
-              <Row label="Height" value={`${wall.height} cm`} />
-              <Row label="Thickness" value={`${wall.thickness} cm`} />
+              <NumberField
+                label="Length (cm)" value={Math.round(wallLength(wall))} min={1} max={5000}
+                onChange={v => setWallLength(wall.id, v)}
+              />
+              <NumberField
+                label="Height (cm)" value={wall.height} min={50} max={600}
+                onChange={v => updateWall(wall.id, { height: v })}
+              />
+              <NumberField
+                label="Thickness (cm)" value={wall.thickness} min={2} max={100}
+                onChange={v => updateWall(wall.id, { thickness: v })}
+              />
             </Section>
 
             <Section label="Openings">
