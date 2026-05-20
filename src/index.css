@@ -20,22 +20,3 @@ body {
   display: flex;
   flex-direction: column;
 }
-
-@keyframes neon-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
-}
-
-@keyframes neon-flicker {
-  0%, 100% { opacity: 1; box-shadow: 0 0 6px 2px rgba(168,85,247,0.8); }
-  25% { opacity: 0.7; box-shadow: 0 0 4px 1px rgba(168,85,247,0.5); }
-  75% { opacity: 0.9; box-shadow: 0 0 8px 2px rgba(168,85,247,0.9); }
-}
-
-.neon-cell-active {
-  animation: neon-pulse 2.5s ease-in-out infinite;
-}
-
-.neon-cell-active-light {
-  animation: neon-pulse 2.5s ease-in-out infinite;
-}
