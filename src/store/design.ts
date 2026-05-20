@@ -15,6 +15,7 @@ type State = {
   selectedId: string | null
   snapEnabled: boolean
   gridSize: number // cm
+  showWelcome: boolean
 }
 
 type Actions = {
@@ -42,14 +43,19 @@ type Actions = {
   deleteOpening: (id: string) => void
 
   addFurniture: (kind: FurnitureKind, position: Vec2) => void
+  addCustomFurniture: (label: string, size: { w: number; d: number; h: number }, color: string, position: Vec2) => void
   moveFurniture: (id: string, position: Vec2) => void
   rotateFurniture: (id: string, delta: number) => void
   deleteFurniture: (id: string) => void
   updateFurnitureSize: (id: string, size: Partial<{ w: number; d: number; h: number }>) => void
+  updateFurnitureLabel: (id: string, label: string) => void
 
   loadDesign: (design: Design) => void
   newDesign: () => void
   save: () => void
+
+  openWelcome: () => void
+  closeWelcome: () => void
 }
 
 function emptyFloor(name: string): Floor {
@@ -62,6 +68,10 @@ function emptyDesign(): Design {
 
 function freshDesign(): Design {
   return loadDesign() ?? emptyDesign()
+}
+
+function isEmptyDesign(d: Design): boolean {
+  return d.floors.length === 1 && d.floors[0].walls.length === 0 && d.floors[0].furniture.length === 0
 }
 
 function commit(design: Design): Design {
@@ -99,6 +109,7 @@ const useDesignStoreBase = create<State & Actions>()(
         selectedId: null as string | null,
         snapEnabled: true,
         gridSize: 5,
+        showWelcome: isEmptyDesign(initial),
 
         setViewMode: m => set({ viewMode: m }),
         setActiveTool: t => set({ activeTool: t }),
@@ -197,6 +208,11 @@ const useDesignStoreBase = create<State & Actions>()(
           set(s => ({ design: commit(mapActive(s, f => ({ ...f, furniture: [...f.furniture, item] }))), selectedId: item.id }))
         },
 
+        addCustomFurniture: (label, size, color, position) => {
+          const item: Furniture = { id: nanoid(), kind: 'custom', position, rotation: 0, size, color, customLabel: label }
+          set(s => ({ design: commit(mapActive(s, f => ({ ...f, furniture: [...f.furniture, item] }))), selectedId: item.id }))
+        },
+
         moveFurniture: (id, position) => {
           set(s => ({ design: commit(mapActive(s, f => ({ ...f, furniture: f.furniture.map(x => x.id === id ? { ...x, position } : x) }))) }))
         },
@@ -213,10 +229,14 @@ const useDesignStoreBase = create<State & Actions>()(
           set(s => ({ design: commit(mapActive(s, f => ({ ...f, furniture: f.furniture.map(x => x.id === id ? { ...x, size: { ...x.size, ...size } } : x) }))) }))
         },
 
+        updateFurnitureLabel: (id, label) => {
+          set(s => ({ design: commit(mapActive(s, f => ({ ...f, furniture: f.furniture.map(x => x.id === id ? { ...x, customLabel: label } : x) }))) }))
+        },
+
         // ── Persistence ────────────────────────────────────────────────────
         loadDesign: design => {
           saveDesign(design)
-          set({ design, activeFloorId: design.floors[0].id, selectedId: null })
+          set({ design, activeFloorId: design.floors[0].id, selectedId: null, showWelcome: false })
         },
 
         newDesign: () => {
@@ -226,6 +246,9 @@ const useDesignStoreBase = create<State & Actions>()(
         },
 
         save: () => saveDesign(get().design),
+
+        openWelcome: () => set({ showWelcome: true }),
+        closeWelcome: () => set({ showWelcome: false }),
       }
     },
     { partialize: (s: State & Actions) => ({ design: s.design }) }

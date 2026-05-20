@@ -84,6 +84,7 @@ function FurnitureItem({
   const { selectedId, setSelected } = useDesignStore()
   const isSelected = interactive && selectedId === item.id
   const cat = CATALOG_MAP[item.kind]
+  const isCustom = item.kind === 'custom'
 
   const w = m(item.size.w)
   const d = m(item.size.d)
@@ -95,6 +96,7 @@ function FurnitureItem({
   const y = m(elevation)
 
   const color = item.color ?? cat.color
+  const displayLabel = isCustom ? (item.customLabel ?? 'Custom') : `${cat.icon} ${cat.label}`
 
   return (
     <group
@@ -102,26 +104,36 @@ function FurnitureItem({
       rotation={[0, -item.rotation, 0]}
       onClick={interactive ? (e => { e.stopPropagation(); setSelected(item.id) }) : undefined}
     >
-      <Suspense fallback={<FallbackBox w={w} h={h} d={d} color={color} />}>
-        <GltfModel kind={item.kind as ModelKind} w={w} h={h} d={d} />
-      </Suspense>
+      {isCustom ? (
+        <FallbackBox w={w} h={h} d={d} color={color} />
+      ) : (
+        <Suspense fallback={<FallbackBox w={w} h={h} d={d} color={color} />}>
+          <GltfModel kind={item.kind as ModelKind} w={w} h={h} d={d} />
+        </Suspense>
+      )}
+
+      {/* Custom objects always show their label; catalog items show label only when selected */}
+      {(isCustom || isSelected) && (
+        <Html
+          position={[0, h + 0.18, 0]}
+          center
+          style={{ pointerEvents: 'none' }}
+        >
+          <div className={`text-[10px] px-2 py-0.5 rounded-full whitespace-nowrap border ${
+            isSelected
+              ? 'bg-blue-900/80 text-blue-200 border-blue-600'
+              : 'bg-gray-900/75 text-gray-200 border-gray-600'
+          }`}>
+            {displayLabel}
+          </div>
+        </Html>
+      )}
 
       {isSelected && (
-        <>
-          <mesh position={[0, h / 2, 0]}>
-            <boxGeometry args={[w + 0.04, h + 0.04, d + 0.04]} />
-            <meshStandardMaterial color="#60a5fa" wireframe transparent opacity={0.5} />
-          </mesh>
-          <Html
-            position={[0, h + 0.25, 0]}
-            center
-            style={{ pointerEvents: 'none' }}
-          >
-            <div className="bg-blue-900/80 text-blue-200 text-[10px] px-2 py-0.5 rounded-full whitespace-nowrap border border-blue-600">
-              {cat.icon} {cat.label}
-            </div>
-          </Html>
-        </>
+        <mesh position={[0, h / 2, 0]}>
+          <boxGeometry args={[w + 0.04, h + 0.04, d + 0.04]} />
+          <meshStandardMaterial color="#60a5fa" wireframe transparent opacity={0.5} />
+        </mesh>
       )}
     </group>
   )

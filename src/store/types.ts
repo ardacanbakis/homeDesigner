@@ -34,6 +34,7 @@ export type FurnitureKind =
   | 'bathtub'
   | 'desk'
   | 'stairs'
+  | 'custom'
 
 export type Furniture = {
   id: string
@@ -42,12 +43,13 @@ export type Furniture = {
   rotation: number
   size: { w: number; d: number; h: number }
   color?: string
+  customLabel?: string // only for kind='custom'
 }
 
 export type Floor = {
   id: string
   name: string
-  height: number // floor-to-floor height in cm (used for 3D stacking)
+  height: number
   walls: Wall[]
   openings: Opening[]
   furniture: Furniture[]

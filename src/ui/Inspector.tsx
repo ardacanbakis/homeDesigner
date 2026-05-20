@@ -6,7 +6,7 @@ export function Inspector() {
   const {
     selectedId, setSelected,
     deleteWall, setWallLength, updateWall, addOpening, updateOpening, deleteOpening,
-    deleteFurniture, rotateFurniture, updateFurnitureSize,
+    deleteFurniture, rotateFurniture, updateFurnitureSize, updateFurnitureLabel,
   } = useDesignStore()
   const floor = useActiveFloor()
 
@@ -144,7 +144,23 @@ export function Inspector() {
         {/* ── Furniture ────────────────────────────────────────── */}
         {furniture && (
           <>
-            <Section label={`${CATALOG_MAP[furniture.kind].icon} ${CATALOG_MAP[furniture.kind].label}`}>
+            <Section label={
+              furniture.kind === 'custom'
+                ? `📦 ${furniture.customLabel ?? 'Custom'}`
+                : `${CATALOG_MAP[furniture.kind].icon} ${CATALOG_MAP[furniture.kind].label}`
+            }>
+              {furniture.kind === 'custom' && (
+                <div className="mb-1">
+                  <label className="text-[10px] text-gray-500 uppercase tracking-wide block mb-0.5">Name</label>
+                  <input
+                    type="text"
+                    value={furniture.customLabel ?? ''}
+                    onChange={e => updateFurnitureLabel(furniture.id, e.target.value)}
+                    maxLength={32}
+                    className="w-full bg-gray-800 text-gray-200 text-xs px-2 py-1 rounded border border-gray-600 focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              )}
               <Row label="X" value={`${Math.round(furniture.position.x)} cm`} />
               <Row label="Y" value={`${Math.round(furniture.position.y)} cm`} />
               <Row label="Rotation" value={`${Math.round((furniture.rotation * 180) / Math.PI)}°`} />
