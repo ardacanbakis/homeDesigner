@@ -20,3 +20,8 @@ body {
   display: flex;
   flex-direction: column;
 }
+
+/* Tailwind v4 no longer applies pointer cursor to buttons by default. */
+button:not(:disabled) {
+  cursor: pointer;
+}

@@ -328,9 +328,14 @@ export function WelcomeScreen() {
 
   const cssVars = { '--neon': neon, '--neon-soft': neonSoft } as CSSProperties
 
-  const secondaryBtn = dark
-    ? 'border border-gray-600 text-gray-200 hover:bg-white/5'
-    : 'border border-gray-300 text-gray-700 hover:bg-black/5'
+  // Shared button styles — cursor-pointer is needed because Tailwind v4 no
+  // longer sets it on <button> by default; hover/active give clickable feel.
+  const primaryBtn = 'font-medium py-3 px-8 rounded-lg text-base text-white cursor-pointer transition-all hover:brightness-110 active:scale-[0.97]'
+  const skipBtn = `${skipColor} text-sm cursor-pointer transition-colors`
+  const secondaryBtn = `font-medium py-3 px-8 rounded-lg text-base cursor-pointer transition-all active:scale-[0.97] ${
+    dark ? 'border border-gray-600 text-gray-200 hover:bg-white/5 hover:border-gray-500'
+         : 'border border-gray-300 text-gray-700 hover:bg-black/5 hover:border-gray-400'
+  }`
 
   return (
     <div
@@ -344,7 +349,7 @@ export function WelcomeScreen() {
       {/* Theme toggle */}
       <button
         onClick={toggleTheme}
-        className={`absolute top-4 right-4 z-10 p-2 rounded-full transition-colors ${themeBtnColor}`}
+        className={`absolute top-4 right-4 z-10 p-2 rounded-full cursor-pointer transition-colors ${themeBtnColor}`}
         title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
       >
         {dark ? <SunIcon /> : <MoonIcon />}
@@ -383,7 +388,7 @@ export function WelcomeScreen() {
             </p>
             <button
               onClick={() => setStep(1)}
-              className="mt-4 font-medium py-3 px-8 rounded-lg transition-all text-base text-white"
+              className={`mt-4 ${primaryBtn}`}
               style={{
                 background: gradient,
                 boxShadow: `0 0 24px ${neonSoft}`,
@@ -393,7 +398,7 @@ export function WelcomeScreen() {
               How It Works
             </button>
             <div style={{ animation: 'welcome-fade-up 0.7s ease-out 2.4s both' }}>
-              <button onClick={startBlank} className={`${skipColor} text-sm transition-colors`}>
+              <button onClick={startBlank} className={skipBtn}>
                 Skip intro
               </button>
             </div>
@@ -444,12 +449,12 @@ export function WelcomeScreen() {
             >
               <button
                 onClick={() => setStep(2)}
-                className="font-medium py-3 px-8 rounded-lg transition-all text-base text-white"
+                className={primaryBtn}
                 style={{ background: gradient, boxShadow: `0 0 24px ${neonSoft}` }}
               >
                 See All Features
               </button>
-              <button onClick={startBlank} className={`${skipColor} text-sm transition-colors`}>
+              <button onClick={startBlank} className={skipBtn}>
                 Skip
               </button>
             </div>
@@ -493,15 +498,12 @@ export function WelcomeScreen() {
             >
               <button
                 onClick={startTemplate}
-                className="font-medium py-3 px-8 rounded-lg transition-all text-base text-white"
+                className={primaryBtn}
                 style={{ background: gradient, boxShadow: `0 0 24px ${neonSoft}` }}
               >
                 Start with Template Home
               </button>
-              <button
-                onClick={startBlank}
-                className={`font-medium py-3 px-8 rounded-lg transition-all text-base ${secondaryBtn}`}
-              >
+              <button onClick={startBlank} className={secondaryBtn}>
                 Start Brand New
               </button>
             </div>
