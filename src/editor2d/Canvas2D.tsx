@@ -37,6 +37,7 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
     design, activeFloorId, activeTool, selectedId, snapEnabled, gridSize,
     setSelected, addWall, moveWallEndpoint, deleteWall, deleteOpening,
     addFurniture, moveFurniture, deleteFurniture, rotateFurniture, setActiveTool,
+    duplicateFurniture, nudgeFurniture,
   } = useDesignStore()
 
   const floor = useActiveFloor()
@@ -59,6 +60,19 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
   // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement).tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return
+      const ctrl = e.ctrlKey || e.metaKey
+      const selFurniture = selectedId && floor.furniture.some(f => f.id === selectedId)
+
+      // Duplicate selected furniture (Ctrl/Cmd+D)
+      if (ctrl && (e.key === 'd' || e.key === 'D') && selFurniture) {
+        e.preventDefault()
+        duplicateFurniture(selectedId!)
+        return
+      }
+      if (ctrl) return // leave other Ctrl combos (undo/redo) to the global handler
+
       if (e.key === 'w' || e.key === 'W') setActiveTool('wall')
       if (e.key === 'v' || e.key === 'V') setActiveTool('select')
       if (e.key === 'Escape') {
@@ -66,20 +80,25 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
         setDrawStart(null)
       }
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) {
-        const tag = (e.target as HTMLElement).tagName
-        if (tag === 'INPUT' || tag === 'TEXTAREA') return
         if (floor.walls.some(w => w.id === selectedId)) deleteWall(selectedId)
-        else if (floor.furniture.some(f => f.id === selectedId)) deleteFurniture(selectedId)
+        else if (selFurniture) deleteFurniture(selectedId)
         else if (floor.openings.some(o => o.id === selectedId)) deleteOpening(selectedId)
       }
-      if ((e.key === 'r' || e.key === 'R') && selectedId) {
-        const isFurniture = floor.furniture.some(f => f.id === selectedId)
-        if (isFurniture) rotateFurniture(selectedId, Math.PI / 2)
+      if ((e.key === 'r' || e.key === 'R') && selFurniture) {
+        rotateFurniture(selectedId!, Math.PI / 2)
+      }
+      // Arrow-key nudge for selected furniture
+      if (selFurniture && e.key.startsWith('Arrow')) {
+        e.preventDefault()
+        const step = snapEnabled ? gridSize : 1
+        const dx = e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0
+        const dy = e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0
+        if (dx || dy) nudgeFurniture(selectedId!, dx, dy)
       }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [selectedId, design, setActiveTool, deleteWall, deleteFurniture, rotateFurniture])
+  }, [selectedId, design, snapEnabled, gridSize, setActiveTool, deleteWall, deleteFurniture, deleteOpening, rotateFurniture, duplicateFurniture, nudgeFurniture])
 
   const getStageMousePos = useCallback((): Vec2 => {
     const stage = stageRef.current

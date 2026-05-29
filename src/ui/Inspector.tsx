@@ -2,11 +2,14 @@ import { useDesignStore, useActiveFloor } from '../store/design'
 import { CATALOG_MAP } from '../geometry/catalog'
 import { wallLength } from '../geometry/walls'
 
+const FURNITURE_COLORS = ['#8B7355', '#6B5B45', '#778899', '#2F2F2F', '#B0C4DE', '#4a7c59', '#3b6ea8', '#8b3a3a', '#f5f5f5']
+
 export function Inspector() {
   const {
     selectedId, setSelected,
     deleteWall, setWallLength, updateWall, addOpening, updateOpening, deleteOpening,
     deleteFurniture, rotateFurniture, updateFurnitureSize, updateFurnitureLabel,
+    updateFurnitureColor, duplicateFurniture,
   } = useDesignStore()
   const floor = useActiveFloor()
 
@@ -183,20 +186,50 @@ export function Inspector() {
               </div>
             </Section>
 
+            <Section label="Color">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {FURNITURE_COLORS.map(c => (
+                  <button
+                    key={c}
+                    onClick={() => updateFurnitureColor(furniture.id, c)}
+                    className={`w-6 h-6 rounded border-2 transition-all ${
+                      (furniture.color ?? '').toLowerCase() === c.toLowerCase() ? 'border-white scale-110' : 'border-transparent'
+                    }`}
+                    style={{ background: c }}
+                  />
+                ))}
+                <input
+                  type="color"
+                  value={furniture.color ?? '#888888'}
+                  onChange={e => updateFurnitureColor(furniture.id, e.target.value)}
+                  className="w-6 h-6 rounded cursor-pointer bg-transparent border-0"
+                  title="Custom color"
+                />
+              </div>
+            </Section>
+
             <div className="flex gap-1">
               <button
                 onClick={() => rotateFurniture(furniture.id, Math.PI / 2)}
                 className="flex-1 px-2 py-1.5 text-xs bg-gray-800 text-gray-300 hover:bg-gray-700 rounded border border-gray-600"
+                title="Rotate 90° (R)"
               >
                 ↻ 90°
               </button>
               <button
-                onClick={() => { deleteFurniture(furniture.id); setSelected(null) }}
-                className="flex-1 px-2 py-1.5 text-xs bg-red-900/40 text-red-300 hover:bg-red-900/60 rounded border border-red-700"
+                onClick={() => duplicateFurniture(furniture.id)}
+                className="flex-1 px-2 py-1.5 text-xs bg-gray-800 text-gray-300 hover:bg-gray-700 rounded border border-gray-600"
+                title="Duplicate (Ctrl+D)"
               >
-                Delete
+                ⧉ Duplicate
               </button>
             </div>
+            <button
+              onClick={() => { deleteFurniture(furniture.id); setSelected(null) }}
+              className="w-full px-2 py-1.5 text-xs bg-red-900/40 text-red-300 hover:bg-red-900/60 rounded border border-red-700"
+            >
+              Delete
+            </button>
           </>
         )}
       </div>
@@ -244,7 +277,8 @@ function KeyHints() {
   return (
     <div className="px-3 py-2 text-[10px] text-gray-600 border-t border-gray-700 space-y-0.5">
       <div>V — select · W — wall</div>
-      <div>R — rotate 90° · Del — delete</div>
+      <div>R — rotate · Ctrl+D — duplicate</div>
+      <div>Arrows — nudge · Del — delete</div>
       <div>Ctrl+Z — undo · Ctrl+Y — redo</div>
     </div>
   )

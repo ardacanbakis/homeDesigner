@@ -1,6 +1,6 @@
 import { useState, useEffect, type CSSProperties } from 'react'
 import { useDesignStore } from '../store/design'
-import { createTemplate } from '../persistence/template'
+import { TemplateGallery } from './TemplateGallery'
 
 const BASE = import.meta.env.BASE_URL
 const THEME_KEY = 'hd-welcome-theme'
@@ -305,9 +305,6 @@ export function WelcomeScreen() {
   const [step, setStep] = useState(0)
   const { dark, toggle: toggleTheme } = useTheme()
 
-  function startTemplate() {
-    loadDesign(createTemplate())
-  }
   function startBlank() {
     newDesign()
     closeWelcome()
@@ -355,7 +352,7 @@ export function WelcomeScreen() {
         {dark ? <SunIcon /> : <MoonIcon />}
       </button>
 
-      <div className="relative z-10 max-w-lg w-full flex-1 flex items-center justify-center">
+      <div className={`relative z-10 w-full flex-1 flex items-center justify-center ${step === 3 ? 'max-w-4xl overflow-y-auto py-6' : 'max-w-lg'}`}>
         {step === 0 && (
           <div className="text-center space-y-6">
             <div
@@ -497,16 +494,31 @@ export function WelcomeScreen() {
               style={{ opacity: 0, animation: `welcome-fade-up 0.6s ease-out ${dark ? '1.8s' : '2.8s'} both` }}
             >
               <button
-                onClick={startTemplate}
+                onClick={() => setStep(3)}
                 className={primaryBtn}
                 style={{ background: gradient, boxShadow: `0 0 24px ${neonSoft}` }}
               >
-                Start with Template Home
+                Browse Templates →
               </button>
               <button onClick={startBlank} className={secondaryBtn}>
                 Start Brand New
               </button>
             </div>
+          </div>
+        )}
+
+        {step === 3 && (
+          <div className="w-full" style={{ animation: 'welcome-fade-up 0.4s ease-out both' }}>
+            <div className="text-center mb-5">
+              <h2 className={`text-xl font-semibold ${text}`}>Pick a Starting Point</h2>
+              <p className={`text-sm ${textFaint} mt-1`}>Open a furnished layout and tweak it, or start from a blank canvas</p>
+            </div>
+            <TemplateGallery
+              dark={dark}
+              accent={neon}
+              onPick={d => loadDesign(d)}
+              onBlank={startBlank}
+            />
           </div>
         )}
       </div>

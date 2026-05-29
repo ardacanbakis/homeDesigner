@@ -24,8 +24,12 @@ export function Palette() {
   const [customD, setCustomD] = useState(80)
   const [customH, setCustomH] = useState(100)
   const [customColor, setCustomColor] = useState('#64748b')
+  const [search, setSearch] = useState('')
 
-  const items = CATALOG.filter(e => e.category === activeCategory)
+  const query = search.trim().toLowerCase()
+  const items = query
+    ? CATALOG.filter(e => e.kind !== 'custom' && e.label.toLowerCase().includes(query))
+    : CATALOG.filter(e => e.category === activeCategory)
 
   const handleDragStart = (e: React.DragEvent, entry: CatalogEntry) => {
     setDragging(entry.kind)
@@ -53,27 +57,54 @@ export function Palette() {
         Furniture
       </div>
 
-      {/* Category tabs — 3-column grid */}
-      <div className="grid grid-cols-3 gap-1 p-2 border-b border-gray-700/80">
-        {CATEGORIES.map(cat => (
-          <button
-            key={cat.id}
-            onClick={() => setActiveCategory(cat.id)}
-            title={cat.label}
-            className={`flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-lg text-[10px] font-medium transition-colors ${
-              activeCategory === cat.id
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-200'
-            }`}
-          >
-            <span className="text-base leading-none">{cat.icon}</span>
-            <span className="leading-none truncate w-full text-center">{cat.label}</span>
-          </button>
-        ))}
+      {/* Search */}
+      <div className="p-2 border-b border-gray-700/80">
+        <div className="relative">
+          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-600 text-xs pointer-events-none">🔍</span>
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search furniture…"
+            className="w-full bg-gray-800 text-gray-200 text-xs pl-7 pr-6 py-1.5 rounded-lg border border-gray-700 focus:outline-none focus:border-blue-500 placeholder-gray-600"
+          />
+          {search && (
+            <button
+              onClick={() => setSearch('')}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 text-xs"
+            >
+              ✕
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Category tabs — hidden while searching */}
+      {!query && (
+        <div className="grid grid-cols-3 gap-1 p-2 border-b border-gray-700/80">
+          {CATEGORIES.map(cat => (
+            <button
+              key={cat.id}
+              onClick={() => setActiveCategory(cat.id)}
+              title={cat.label}
+              className={`flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-lg text-[10px] font-medium transition-colors ${
+                activeCategory === cat.id
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-200'
+              }`}
+            >
+              <span className="text-base leading-none">{cat.icon}</span>
+              <span className="leading-none truncate w-full text-center">{cat.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Item list */}
       <div className="flex-1 overflow-y-auto p-2 space-y-1">
+        {items.length === 0 && (
+          <div className="text-center text-gray-600 text-xs py-6">No furniture matches "{search}"</div>
+        )}
         {items.map(entry => (
           <div
             key={entry.kind}

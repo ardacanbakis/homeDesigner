@@ -16,6 +16,7 @@ type State = {
   snapEnabled: boolean
   gridSize: number // cm
   showWelcome: boolean
+  showTemplatePicker: boolean
 }
 
 type Actions = {
@@ -45,10 +46,13 @@ type Actions = {
   addFurniture: (kind: FurnitureKind, position: Vec2) => void
   addCustomFurniture: (label: string, size: { w: number; d: number; h: number }, color: string, position: Vec2) => void
   moveFurniture: (id: string, position: Vec2) => void
+  nudgeFurniture: (id: string, dx: number, dy: number) => void
   rotateFurniture: (id: string, delta: number) => void
+  duplicateFurniture: (id: string) => void
   deleteFurniture: (id: string) => void
   updateFurnitureSize: (id: string, size: Partial<{ w: number; d: number; h: number }>) => void
   updateFurnitureLabel: (id: string, label: string) => void
+  updateFurnitureColor: (id: string, color: string) => void
 
   loadDesign: (design: Design) => void
   newDesign: () => void
@@ -56,6 +60,8 @@ type Actions = {
 
   openWelcome: () => void
   closeWelcome: () => void
+  openTemplatePicker: () => void
+  closeTemplatePicker: () => void
 }
 
 function emptyFloor(name: string): Floor {
@@ -110,6 +116,7 @@ const useDesignStoreBase = create<State & Actions>()(
         snapEnabled: true,
         gridSize: 5,
         showWelcome: isEmptyDesign(initial),
+        showTemplatePicker: false,
 
         setViewMode: m => set({ viewMode: m }),
         setActiveTool: t => set({ activeTool: t }),
@@ -217,8 +224,27 @@ const useDesignStoreBase = create<State & Actions>()(
           set(s => ({ design: commit(mapActive(s, f => ({ ...f, furniture: f.furniture.map(x => x.id === id ? { ...x, position } : x) }))) }))
         },
 
+        nudgeFurniture: (id, dx, dy) => {
+          set(s => ({ design: commit(mapActive(s, f => ({ ...f, furniture: f.furniture.map(x => x.id === id ? { ...x, position: { x: x.position.x + dx, y: x.position.y + dy } } : x) }))) }))
+        },
+
         rotateFurniture: (id, delta) => {
           set(s => ({ design: commit(mapActive(s, f => ({ ...f, furniture: f.furniture.map(x => x.id === id ? { ...x, rotation: x.rotation + delta } : x) }))) }))
+        },
+
+        duplicateFurniture: id => {
+          set(s => {
+            const floor = s.design.floors.find(f => f.id === s.activeFloorId)
+            const src = floor?.furniture.find(x => x.id === id)
+            if (!src) return {}
+            const copy: Furniture = {
+              ...src,
+              id: nanoid(),
+              size: { ...src.size },
+              position: { x: src.position.x + 20, y: src.position.y + 20 },
+            }
+            return { design: commit(mapActive(s, f => ({ ...f, furniture: [...f.furniture, copy] }))), selectedId: copy.id }
+          })
         },
 
         deleteFurniture: id => {
@@ -233,10 +259,14 @@ const useDesignStoreBase = create<State & Actions>()(
           set(s => ({ design: commit(mapActive(s, f => ({ ...f, furniture: f.furniture.map(x => x.id === id ? { ...x, customLabel: label } : x) }))) }))
         },
 
+        updateFurnitureColor: (id, color) => {
+          set(s => ({ design: commit(mapActive(s, f => ({ ...f, furniture: f.furniture.map(x => x.id === id ? { ...x, color } : x) }))) }))
+        },
+
         // ── Persistence ────────────────────────────────────────────────────
         loadDesign: design => {
           saveDesign(design)
-          set({ design, activeFloorId: design.floors[0].id, selectedId: null, showWelcome: false })
+          set({ design, activeFloorId: design.floors[0].id, selectedId: null, showWelcome: false, showTemplatePicker: false })
         },
 
         newDesign: () => {
@@ -249,6 +279,8 @@ const useDesignStoreBase = create<State & Actions>()(
 
         openWelcome: () => set({ showWelcome: true }),
         closeWelcome: () => set({ showWelcome: false }),
+        openTemplatePicker: () => set({ showTemplatePicker: true }),
+        closeTemplatePicker: () => set({ showTemplatePicker: false }),
       }
     },
     { partialize: (s: State & Actions) => ({ design: s.design }) }

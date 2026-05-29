@@ -6,6 +6,7 @@ import { Inspector } from './ui/Inspector'
 import { Canvas2D } from './editor2d/Canvas2D'
 import { Scene3D } from './scene3d/Scene3D'
 import { WelcomeScreen } from './ui/WelcomeScreen'
+import { TemplatePicker } from './ui/TemplatePicker'
 
 function useWorkspaceSize() {
   const [size, setSize] = useState({ width: window.innerWidth, height: window.innerHeight })
@@ -18,7 +19,7 @@ function useWorkspaceSize() {
 }
 
 export default function App() {
-  const { viewMode, showWelcome } = useDesignStore()
+  const { viewMode, showWelcome, showTemplatePicker } = useDesignStore()
   const { width, height } = useWorkspaceSize()
 
   const TOOLBAR_H = 48
@@ -41,6 +42,7 @@ export default function App() {
         </div>
         <Inspector />
         {showWelcome && <WelcomeScreen />}
+        {showTemplatePicker && !showWelcome && <TemplatePicker />}
       </div>
     </div>
   )
