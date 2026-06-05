@@ -98,7 +98,9 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [selectedId, design, snapEnabled, gridSize, setActiveTool, deleteWall, deleteFurniture, deleteOpening, rotateFurniture, duplicateFurniture, nudgeFurniture])
+    // floor.walls/furniture/openings are read via `floor` (a closure on the active floor) — re-binding on every tiny change is undesirable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId, snapEnabled, gridSize, setActiveTool, deleteWall, deleteFurniture, deleteOpening, rotateFurniture, duplicateFurniture, nudgeFurniture])
 
   const getStageMousePos = useCallback((): Vec2 => {
     const stage = stageRef.current
@@ -164,7 +166,7 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
     }
   }, [activeTool, drawStart, getStageMousePos, getSnappedCmPos, addWall, offset, setSelected])
 
-  const handleStageMouseMove = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
+  const handleStageMouseMove = useCallback(() => {
     const pos = getStageMousePos()
 
     if (isPanning && panStart) {

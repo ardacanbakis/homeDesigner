@@ -10,7 +10,10 @@ import type { Design } from '../store/types'
 
 type ControlsLike = { target: THREE.Vector3; update: () => void }
 
-/** Frames the camera on the design's bounding box. */
+/** Frames the camera on the design's bounding box.
+ *  Mutating the camera returned from useThree is the standard r3f pattern;
+ *  the react-hooks/immutability rule's false positive is silenced below. */
+/* eslint-disable react-hooks/immutability */
 function useFrameDesign() {
   const camera = useThree(s => s.camera)
   const controls = useThree(s => s.controls) as ControlsLike | null
@@ -18,7 +21,6 @@ function useFrameDesign() {
   return useCallback(
     (design: Design) => {
       const b = designBounds(design)
-      // Default framing for an empty scene
       const center = new THREE.Vector3(0, 0, 0)
       let radius = 4
 
@@ -47,6 +49,7 @@ function useFrameDesign() {
     [camera, controls]
   )
 }
+/* eslint-enable react-hooks/immutability */
 
 function SceneContent() {
   const design = useDesignStore(s => s.design)

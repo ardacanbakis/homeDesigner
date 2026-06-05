@@ -1,23 +1,9 @@
-import { useState, useEffect, type CSSProperties } from 'react'
+import { useState, type CSSProperties } from 'react'
 import { useDesignStore } from '../store/design'
 import { TemplateGallery } from './TemplateGallery'
+import { useTheme } from './useTheme'
 
 const BASE = import.meta.env.BASE_URL
-const THEME_KEY = 'hd-welcome-theme'
-
-export function useTheme() {
-  const [dark, setDark] = useState(() => {
-    const saved = localStorage.getItem(THEME_KEY)
-    if (saved !== null) return saved === 'dark'
-    return window.matchMedia('(prefers-color-scheme: dark)').matches
-  })
-
-  useEffect(() => {
-    localStorage.setItem(THEME_KEY, dark ? 'dark' : 'light')
-  }, [dark])
-
-  return { dark, toggle: () => setDark(d => !d) }
-}
 
 // ── Social icons ────────────────────────────────────────────────────────────────
 function GithubIcon() {
