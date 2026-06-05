@@ -114,8 +114,14 @@ function initialTheme(): 'dark' | 'light' {
     const saved = localStorage.getItem(THEME_KEY)
     if (saved === 'dark' || saved === 'light') return saved
   } catch { /* ignore */ }
-  // Default to dark unless OS strongly prefers light.
-  if (typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: light)').matches) return 'light'
+  // Default to dark unless OS strongly prefers light. window.matchMedia is
+  // missing in some test environments — guard accordingly.
+  try {
+    if (typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+        && window.matchMedia('(prefers-color-scheme: light)').matches) {
+      return 'light'
+    }
+  } catch { /* ignore */ }
   return 'dark'
 }
 

@@ -17,6 +17,54 @@ function key(p: Vec2): string {
   return `${Math.round(p.x / POINT_PRECISION)},${Math.round(p.y / POINT_PRECISION)}`
 }
 
+type Segment = { a: Vec2; b: Vec2 }
+
+/** Distance from a point to a finite segment, in cm. */
+function pointSegmentDistance(p: Vec2, a: Vec2, b: Vec2): { dist: number; t: number } {
+  const dx = b.x - a.x
+  const dy = b.y - a.y
+  const lenSq = dx * dx + dy * dy
+  if (lenSq < 1e-9) return { dist: Math.hypot(p.x - a.x, p.y - a.y), t: 0 }
+  let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / lenSq
+  t = Math.max(0, Math.min(1, t))
+  const px = a.x + t * dx
+  const py = a.y + t * dy
+  return { dist: Math.hypot(p.x - px, p.y - py), t }
+}
+
+/** Split each wall at every other wall's endpoint that lies on its interior. */
+function subdivideAtJunctions(walls: Wall[]): Segment[] {
+  const TOL = 0.6 // cm — slightly above POINT_PRECISION to absorb keying drift
+  // Collect a deduped list of all endpoints.
+  const endpoints: Vec2[] = []
+  const seen = new Set<string>()
+  for (const w of walls) {
+    for (const p of [w.a, w.b]) {
+      const k = key(p)
+      if (!seen.has(k)) { seen.add(k); endpoints.push(p) }
+    }
+  }
+
+  const segments: Segment[] = []
+  for (const w of walls) {
+    // Find every endpoint that lies on the wall's interior (excluding its own endpoints).
+    const splits: { t: number; p: Vec2 }[] = []
+    for (const p of endpoints) {
+      if (key(p) === key(w.a) || key(p) === key(w.b)) continue
+      const { dist, t } = pointSegmentDistance(p, w.a, w.b)
+      if (dist < TOL && t > 0 && t < 1) splits.push({ t, p })
+    }
+    splits.sort((x, y) => x.t - y.t)
+    let prev = w.a
+    for (const s of splits) {
+      segments.push({ a: prev, b: s.p })
+      prev = s.p
+    }
+    segments.push({ a: prev, b: w.b })
+  }
+  return segments
+}
+
 /** Planar-face room derivation:
  *  - build an undirected graph from wall endpoints
  *  - for each directed half-edge, repeatedly pick the next edge with the
@@ -25,6 +73,13 @@ function key(p: Vec2): string {
  *  - all bounded faces are rooms. */
 export function deriveRooms(walls: Wall[]): Room[] {
   if (walls.length < 3) return []
+
+  // ── Subdivide walls at T-junctions ─────────────────────────────────────────
+  // A wall that ends *on* another wall (touching its interior, not its endpoint)
+  // creates a T-junction. Without splitting the host wall at that point, the
+  // adjacency graph is disconnected at the junction and room derivation misses
+  // rooms separated by such partitions.
+  const subdivided = subdivideAtJunctions(walls)
 
   // ── Build vertices + adjacency ─────────────────────────────────────────────
   const vertMap = new Map<string, Vec2>()
@@ -37,9 +92,9 @@ export function deriveRooms(walls: Wall[]): Room[] {
     }
     return k
   }
-  for (const w of walls) {
-    const ka = addVert(w.a)
-    const kb = addVert(w.b)
+  for (const seg of subdivided) {
+    const ka = addVert(seg.a)
+    const kb = addVert(seg.b)
     if (ka === kb) continue
     if (!adj.get(ka)!.includes(kb)) adj.get(ka)!.push(kb)
     if (!adj.get(kb)!.includes(ka)) adj.get(kb)!.push(ka)
