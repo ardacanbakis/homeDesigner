@@ -19,7 +19,7 @@ export function Inspector() {
 
   if (!selectedId || (!wall && !opening && !furniture)) {
     return (
-      <div className="w-56 bg-gray-900 border-l border-gray-700 shrink-0 flex flex-col">
+      <div className="w-56 bg-gray-900 light:bg-white border-l border-gray-700 light:border-gray-200 shrink-0 flex flex-col">
         <div className="px-3 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-700">
           Inspector
         </div>
@@ -32,7 +32,7 @@ export function Inspector() {
   }
 
   return (
-    <div className="w-56 bg-gray-900 border-l border-gray-700 shrink-0 flex flex-col">
+    <div className="w-56 bg-gray-900 light:bg-white border-l border-gray-700 light:border-gray-200 shrink-0 flex flex-col">
       <div className="px-3 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-700 flex justify-between items-center">
         <span>Inspector</span>
         <button onClick={() => setSelected(null)} className="text-gray-500 hover:text-gray-300 text-sm">✕</button>

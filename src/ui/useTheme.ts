@@ -1,17 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useDesignStore } from '../store/design'
 
-const THEME_KEY = 'hd-welcome-theme'
-
+/** Thin wrapper so welcome screen + editor share one theme source.
+ *  Keeps the historical { dark, toggle } API. */
 export function useTheme() {
-  const [dark, setDark] = useState(() => {
-    const saved = localStorage.getItem(THEME_KEY)
-    if (saved !== null) return saved === 'dark'
-    return window.matchMedia('(prefers-color-scheme: dark)').matches
-  })
-
-  useEffect(() => {
-    localStorage.setItem(THEME_KEY, dark ? 'dark' : 'light')
-  }, [dark])
-
-  return { dark, toggle: () => setDark(d => !d) }
+  const theme = useDesignStore(s => s.theme)
+  const toggle = useDesignStore(s => s.toggleTheme)
+  return { dark: theme === 'dark', toggle }
 }

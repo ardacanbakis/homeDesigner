@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Tailwind v4: opt-in `light:` variant driven by <html data-theme="light">. */
+@custom-variant light (&:where([data-theme=light], [data-theme=light] *));
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -13,6 +16,41 @@ body {
   overflow: hidden;
   height: 100vh;
 }
+
+html[data-theme="light"] body {
+  background: #f1f5f9;
+  color: #1e293b;
+}
+
+/* Pragmatic light-mode remap: components keep their dark-shade utility
+   classes; we just retint them under data-theme=light so the entire UI
+   inherits a sensible light palette without rewriting every classname.
+   Notes:
+   - text-white is intentionally NOT remapped — it's used as label color
+     on colored backgrounds (active blue toolbar buttons etc.).
+   - bg-blue-*, bg-indigo-*, bg-cyan-*, bg-red-* etc. stay as accents. */
+html[data-theme="light"] .bg-gray-900 { background-color: #ffffff; }
+html[data-theme="light"] .bg-gray-800 { background-color: #f1f5f9; }
+html[data-theme="light"] .bg-gray-800\/80 { background-color: #f1f5f9cc; }
+html[data-theme="light"] .bg-gray-800\/60 { background-color: #f1f5f999; }
+html[data-theme="light"] .bg-gray-700 { background-color: #e2e8f0; }
+html[data-theme="light"] .bg-gray-950 { background-color: #f8fafc; }
+
+html[data-theme="light"] .text-gray-200 { color: #1e293b; }
+html[data-theme="light"] .text-gray-300 { color: #334155; }
+html[data-theme="light"] .text-gray-400 { color: #475569; }
+html[data-theme="light"] .text-gray-500 { color: #64748b; }
+html[data-theme="light"] .text-gray-600 { color: #94a3b8; }
+html[data-theme="light"] .text-gray-700 { color: #64748b; }
+
+html[data-theme="light"] .border-gray-600 { border-color: #cbd5e1; }
+html[data-theme="light"] .border-gray-700,
+html[data-theme="light"] .border-gray-700\/80,
+html[data-theme="light"] .border-gray-700\/60 { border-color: #e2e8f0; }
+html[data-theme="light"] .border-gray-800 { border-color: #e2e8f0; }
+
+/* Disabled / muted variants */
+html[data-theme="light"] .bg-gray-900.cursor-not-allowed { background-color: #f1f5f9; }
 
 #root {
   width: 100%;

@@ -40,7 +40,15 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
     addWall, moveWallEndpoint, deleteWall, deleteOpening,
     addFurniture, moveFurniture, deleteFurniture, rotateFurniture, setActiveTool,
     duplicateFurniture, nudgeFurniture, copySelection, pasteClipboard,
+    theme,
   } = useDesignStore()
+  const dark = theme === 'dark'
+  const FLOOR_COLOR = dark ? '#12121e' : '#f8fafc'
+  const MINOR_COLOR = dark ? '#21212e' : '#e2e8f0'
+  const MAJOR_COLOR = dark ? '#333346' : '#cbd5e1'
+  const WALL_COLOR = dark ? '#94a3b8' : '#475569'
+  const LABEL_COLOR = dark ? '#cbd5e1' : '#475569'
+  const LEN_LABEL_COLOR = dark ? '#64748b' : '#94a3b8'
 
   const floor = useActiveFloor()
   // Walls of the floor directly below, shown faintly so rooms can be aligned.
@@ -338,8 +346,8 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
       }
     }
 
-    drawTier(MINOR_CM, '#21212e', 'min')
-    drawTier(MAJOR_CM, '#333346', 'maj')
+    drawTier(MINOR_CM, MINOR_COLOR, 'min')
+    drawTier(MAJOR_CM, MAJOR_COLOR, 'maj')
     return lines
   }
 
@@ -363,7 +371,7 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
       >
         {/* Grid layer */}
         <Layer listening={false}>
-          <Rect name="floor" x={0} y={0} width={width} height={height} fill="#12121e" />
+          <Rect name="floor" x={0} y={0} width={width} height={height} fill={FLOOR_COLOR} />
           {gridLines()}
         </Layer>
 
@@ -391,7 +399,7 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
                     align="center"
                     fontSize={12}
                     fontStyle="bold"
-                    fill="#cbd5e1"
+                    fill={LABEL_COLOR}
                     opacity={0.85}
                   />
                 )}
@@ -434,7 +442,7 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
               <Group key={wall.id}>
                 <Line
                   points={[ap.x, ap.y, bp.x, bp.y]}
-                  stroke={isSelected ? '#60a5fa' : '#94a3b8'}
+                  stroke={isSelected ? '#60a5fa' : WALL_COLOR}
                   strokeWidth={Math.max(2, cmToPx(wall.thickness, scale))}
                   lineCap="square"
                   onClick={() => setSelected(wall.id)}
@@ -470,7 +478,7 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
                     y={midY - 12}
                     text={`${Math.round(len)} cm`}
                     fontSize={10}
-                    fill={isSelected ? '#93c5fd' : '#64748b'}
+                    fill={isSelected ? '#93c5fd' : LEN_LABEL_COLOR}
                     align="center"
                     offsetX={20}
                     listening={false}
@@ -501,7 +509,7 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
                           width={opWPx}
                           height={wallT}
                           fill={opSeleted ? '#dbeafe' : '#f8fafc'}
-                          stroke={opSeleted ? '#3b82f6' : '#94a3b8'}
+                          stroke={opSeleted ? '#3b82f6' : WALL_COLOR}
                           strokeWidth={1}
                         />
                         {isDoor ? (

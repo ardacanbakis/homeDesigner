@@ -19,8 +19,13 @@ function useWorkspaceSize() {
 }
 
 export default function App() {
-  const { viewMode, showWelcome, showTemplatePicker } = useDesignStore()
+  const { viewMode, showWelcome, showTemplatePicker, theme } = useDesignStore()
   const { width, height } = useWorkspaceSize()
+
+  // Reflect the theme on <html> so CSS + the light: Tailwind variant can target it.
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+  }, [theme])
 
   const TOOLBAR_H = 48
   const PALETTE_W = 220
@@ -29,7 +34,7 @@ export default function App() {
   const workspaceH = height - TOOLBAR_H
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-gray-950">
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-gray-950 light:bg-slate-100">
       <Toolbar />
       <div className="flex flex-1 overflow-hidden relative">
         <Palette />

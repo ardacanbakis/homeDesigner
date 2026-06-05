@@ -15,6 +15,9 @@ type State = {
   cameraMode: CameraMode
   /** Hide non-active floors in 3D when true. */
   isolateActiveFloor: boolean
+  theme: 'dark' | 'light'
+  /** Epoch ms of the most recent persisted save. */
+  lastSavedAt: number
   selectedId: string | null
   /** Additional selected furniture IDs (selectedId is the primary).
    *  Multi-selection only applies to furniture on the active floor. */
@@ -32,6 +35,8 @@ type Actions = {
   setActiveTool: (t: ActiveTool) => void
   setCameraMode: (m: CameraMode) => void
   toggleFloorIsolation: () => void
+  setTheme: (t: 'dark' | 'light') => void
+  toggleTheme: () => void
   setSelected: (id: string | null) => void
   /** Replace the multi-selection. The first id (if any) also becomes selectedId. */
   setSelectedIds: (ids: string[]) => void
@@ -103,6 +108,17 @@ function commit(design: Design): Design {
   return design
 }
 
+const THEME_KEY = 'hd-theme'
+function initialTheme(): 'dark' | 'light' {
+  try {
+    const saved = localStorage.getItem(THEME_KEY)
+    if (saved === 'dark' || saved === 'light') return saved
+  } catch { /* ignore */ }
+  // Default to dark unless OS strongly prefers light.
+  if (typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: light)').matches) return 'light'
+  return 'dark'
+}
+
 /** Cumulative elevation (cm) of each floor by index: floor 0 at 0, floor n above the sum of heights below. */
 export function floorElevations(floors: Floor[]): number[] {
   const out: number[] = []
@@ -132,6 +148,8 @@ const useDesignStoreBase = create<State & Actions>()(
         activeTool: 'select' as ActiveTool,
         cameraMode: 'orbit' as CameraMode,
         isolateActiveFloor: false,
+        theme: initialTheme(),
+        lastSavedAt: Date.now(),
         selectedId: null as string | null,
         selectedIds: [] as string[],
         clipboard: [] as Furniture[],
@@ -144,6 +162,12 @@ const useDesignStoreBase = create<State & Actions>()(
         setActiveTool: t => set({ activeTool: t }),
         setCameraMode: m => set({ cameraMode: m }),
         toggleFloorIsolation: () => set(s => ({ isolateActiveFloor: !s.isolateActiveFloor })),
+        setTheme: t => { try { localStorage.setItem(THEME_KEY, t) } catch { /* ignore */ }; set({ theme: t }) },
+        toggleTheme: () => {
+          const next = get().theme === 'dark' ? 'light' : 'dark'
+          try { localStorage.setItem(THEME_KEY, next) } catch { /* ignore */ }
+          set({ theme: next })
+        },
         setSelected: id => set({ selectedId: id, selectedIds: id ? [id] : [] }),
         setSelectedIds: ids => set({ selectedIds: ids, selectedId: ids[0] ?? null }),
         toggleSelected: id => {
@@ -425,6 +449,14 @@ const useDesignStoreBase = create<State & Actions>()(
     { partialize: (s: State & Actions) => ({ design: s.design }) }
   )
 )
+
+// Bump lastSavedAt whenever the design object actually changes — this is how
+// the autosave indicator in the toolbar knows what to display.
+useDesignStoreBase.subscribe((s, prev) => {
+  if (s.design !== prev.design) {
+    useDesignStoreBase.setState({ lastSavedAt: Date.now() })
+  }
+})
 
 export const useDesignStore = useDesignStoreBase
 

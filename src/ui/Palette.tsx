@@ -52,7 +52,7 @@ export function Palette() {
   }
 
   return (
-    <div className="w-[220px] flex flex-col bg-gray-900 border-r border-gray-700/80 shrink-0 overflow-hidden">
+    <div className="w-[220px] flex flex-col bg-gray-900 light:bg-white border-r border-gray-700/80 light:border-gray-200 shrink-0 overflow-hidden">
       <div className="px-3 py-2.5 text-[11px] font-semibold text-gray-400 uppercase tracking-widest border-b border-gray-700/80">
         Furniture
       </div>

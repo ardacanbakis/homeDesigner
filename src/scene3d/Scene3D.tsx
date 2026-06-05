@@ -297,7 +297,7 @@ export function Scene3D() {
   )
 
   return (
-    <div className="absolute inset-0 bg-[#aab2c0]">
+    <div className="absolute inset-0 bg-[#aab2c0] light:bg-[#e2e8f0]">
       <Canvas shadows camera={{ position: [6, 6, 8], fov: 50 }} dpr={[1, 2]} gl={{ preserveDrawingBuffer: true }}>
         <Suspense fallback={null}>
           <SceneContent onShotReady={onShotReady} />
