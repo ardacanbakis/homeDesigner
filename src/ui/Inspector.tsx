@@ -276,10 +276,10 @@ function NumberField({ label, value, min, max, onChange }: {
 function KeyHints() {
   return (
     <div className="px-3 py-2 text-[10px] text-gray-600 border-t border-gray-700 space-y-0.5">
-      <div>V — select · W — wall</div>
-      <div>R — rotate · Ctrl+D — duplicate</div>
+      <div>V — select · W — wall · M — measure</div>
+      <div>R — rotate · F — fit · Shift-click — multi</div>
+      <div>Ctrl+C/V/D — copy/paste/dup</div>
       <div>Arrows — nudge · Del — delete</div>
-      <div>Ctrl+Z — undo · Ctrl+Y — redo</div>
     </div>
   )
 }

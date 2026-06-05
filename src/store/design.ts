@@ -13,6 +13,11 @@ type State = {
   viewMode: ViewMode
   activeTool: ActiveTool
   selectedId: string | null
+  /** Additional selected furniture IDs (selectedId is the primary).
+   *  Multi-selection only applies to furniture on the active floor. */
+  selectedIds: string[]
+  /** Clipboard of furniture copied with Ctrl+C (cross-floor paste supported). */
+  clipboard: Furniture[]
   snapEnabled: boolean
   gridSize: number // cm
   showWelcome: boolean
@@ -23,6 +28,14 @@ type Actions = {
   setViewMode: (m: ViewMode) => void
   setActiveTool: (t: ActiveTool) => void
   setSelected: (id: string | null) => void
+  /** Replace the multi-selection. The first id (if any) also becomes selectedId. */
+  setSelectedIds: (ids: string[]) => void
+  /** Add or remove an id from the multi-selection (shift-click). */
+  toggleSelected: (id: string) => void
+  copySelection: () => void
+  pasteClipboard: () => void
+  alignSelected: (axis: 'left' | 'right' | 'top' | 'bottom' | 'hcenter' | 'vcenter') => void
+  distributeSelected: (axis: 'horizontal' | 'vertical') => void
   toggleSnap: () => void
   undo: () => void
   redo: () => void
@@ -113,6 +126,8 @@ const useDesignStoreBase = create<State & Actions>()(
         viewMode: '2d' as ViewMode,
         activeTool: 'select' as ActiveTool,
         selectedId: null as string | null,
+        selectedIds: [] as string[],
+        clipboard: [] as Furniture[],
         snapEnabled: true,
         gridSize: 5,
         showWelcome: isEmptyDesign(initial),
@@ -120,7 +135,122 @@ const useDesignStoreBase = create<State & Actions>()(
 
         setViewMode: m => set({ viewMode: m }),
         setActiveTool: t => set({ activeTool: t }),
-        setSelected: id => set({ selectedId: id }),
+        setSelected: id => set({ selectedId: id, selectedIds: id ? [id] : [] }),
+        setSelectedIds: ids => set({ selectedIds: ids, selectedId: ids[0] ?? null }),
+        toggleSelected: id => {
+          set(s => {
+            const next = s.selectedIds.includes(id)
+              ? s.selectedIds.filter(x => x !== id)
+              : [...s.selectedIds, id]
+            return { selectedIds: next, selectedId: next[0] ?? null }
+          })
+        },
+
+        copySelection: () => {
+          const s = get()
+          const floor = s.design.floors.find(f => f.id === s.activeFloorId)
+          if (!floor) return
+          const items = floor.furniture.filter(f => s.selectedIds.includes(f.id))
+          if (items.length === 0) return
+          set({ clipboard: items.map(f => ({ ...f, size: { ...f.size }, position: { ...f.position } })) })
+        },
+
+        pasteClipboard: () => {
+          set(s => {
+            if (s.clipboard.length === 0) return {}
+            // Offset pasted items so they don't sit directly on the originals.
+            const copies: Furniture[] = s.clipboard.map(f => ({
+              ...f,
+              id: nanoid(),
+              position: { x: f.position.x + 20, y: f.position.y + 20 },
+              size: { ...f.size },
+            }))
+            return {
+              design: commit(mapActive(s, f => ({ ...f, furniture: [...f.furniture, ...copies] }))),
+              selectedId: copies[0].id,
+              selectedIds: copies.map(c => c.id),
+            }
+          })
+        },
+
+        alignSelected: axis => {
+          set(s => {
+            const floor = s.design.floors.find(f => f.id === s.activeFloorId)
+            if (!floor) return {}
+            const sel = floor.furniture.filter(f => s.selectedIds.includes(f.id))
+            if (sel.length < 2) return {}
+            // Bounds based on top-left + size on the chosen axis.
+            const lefts = sel.map(f => f.position.x)
+            const rights = sel.map(f => f.position.x + f.size.w)
+            const tops = sel.map(f => f.position.y)
+            const bottoms = sel.map(f => f.position.y + f.size.d)
+            const targetLeft = Math.min(...lefts)
+            const targetRight = Math.max(...rights)
+            const targetTop = Math.min(...tops)
+            const targetBottom = Math.max(...bottoms)
+            const targetHCenter = (targetTop + targetBottom) / 2
+            const targetVCenter = (targetLeft + targetRight) / 2
+            return {
+              design: commit(mapActive(s, f => ({
+                ...f,
+                furniture: f.furniture.map(item => {
+                  if (!s.selectedIds.includes(item.id)) return item
+                  let { x, y } = item.position
+                  if (axis === 'left') x = targetLeft
+                  else if (axis === 'right') x = targetRight - item.size.w
+                  else if (axis === 'vcenter') x = targetVCenter - item.size.w / 2
+                  else if (axis === 'top') y = targetTop
+                  else if (axis === 'bottom') y = targetBottom - item.size.d
+                  else if (axis === 'hcenter') y = targetHCenter - item.size.d / 2
+                  return { ...item, position: { x, y } }
+                }),
+              }))),
+            }
+          })
+        },
+
+        distributeSelected: axis => {
+          set(s => {
+            const floor = s.design.floors.find(f => f.id === s.activeFloorId)
+            if (!floor) return {}
+            const sel = floor.furniture.filter(f => s.selectedIds.includes(f.id))
+            if (sel.length < 3) return {}
+            // Distribute centers evenly between first and last along the axis.
+            const sorted = [...sel].sort((a, b) =>
+              axis === 'horizontal'
+                ? (a.position.x + a.size.w / 2) - (b.position.x + b.size.w / 2)
+                : (a.position.y + a.size.d / 2) - (b.position.y + b.size.d / 2)
+            )
+            const first = sorted[0]
+            const last = sorted[sorted.length - 1]
+            const firstCenter = axis === 'horizontal'
+              ? first.position.x + first.size.w / 2
+              : first.position.y + first.size.d / 2
+            const lastCenter = axis === 'horizontal'
+              ? last.position.x + last.size.w / 2
+              : last.position.y + last.size.d / 2
+            const step = (lastCenter - firstCenter) / (sorted.length - 1)
+            const newPositions = new Map<string, Vec2>()
+            sorted.forEach((item, i) => {
+              const targetCenter = firstCenter + step * i
+              if (axis === 'horizontal') {
+                newPositions.set(item.id, { x: targetCenter - item.size.w / 2, y: item.position.y })
+              } else {
+                newPositions.set(item.id, { x: item.position.x, y: targetCenter - item.size.d / 2 })
+              }
+            })
+            return {
+              design: commit(mapActive(s, f => ({
+                ...f,
+                furniture: f.furniture.map(item => newPositions.has(item.id)
+                  ? { ...item, position: newPositions.get(item.id)! }
+                  : item
+                ),
+              }))),
+            }
+          })
+        },
+
         toggleSnap: () => set(s => ({ snapEnabled: !s.snapEnabled })),
 
         undo: () => { useDesignStoreBase.temporal.getState().undo(); saveDesign(get().design) },

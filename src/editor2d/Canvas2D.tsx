@@ -34,10 +34,11 @@ function cmToStagePos(cm: Vec2, offset: Vec2, scale: number): { x: number; y: nu
 
 export function Canvas2D({ width, height }: { width: number; height: number }) {
   const {
-    design, activeFloorId, activeTool, selectedId, snapEnabled, gridSize,
-    setSelected, addWall, moveWallEndpoint, deleteWall, deleteOpening,
+    design, activeFloorId, activeTool, selectedId, selectedIds, snapEnabled, gridSize,
+    setSelected, setSelectedIds, toggleSelected,
+    addWall, moveWallEndpoint, deleteWall, deleteOpening,
     addFurniture, moveFurniture, deleteFurniture, rotateFurniture, setActiveTool,
-    duplicateFurniture, nudgeFurniture,
+    duplicateFurniture, nudgeFurniture, copySelection, pasteClipboard,
   } = useDesignStore()
 
   const floor = useActiveFloor()
@@ -57,50 +58,100 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
   const [drawStart, setDrawStart] = useState<Vec2 | null>(null)
   const [mousePos, setMousePos] = useState<Vec2>({ x: 0, y: 0 })
 
+  // Measurement tool — toggle with M, click two points to read the distance
+  const [measureMode, setMeasureMode] = useState(false)
+  const [measureStart, setMeasureStart] = useState<Vec2 | null>(null)
+
+  // Marquee (rubber-band) selection — drag on empty space with select tool
+  const [marquee, setMarquee] = useState<{ a: Vec2; b: Vec2 } | null>(null)
+
+  /** Frame all walls + furniture on the active floor with padding. */
+  const fitToView = useCallback(() => {
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
+    for (const wl of floor.walls) {
+      minX = Math.min(minX, wl.a.x, wl.b.x); maxX = Math.max(maxX, wl.a.x, wl.b.x)
+      minY = Math.min(minY, wl.a.y, wl.b.y); maxY = Math.max(maxY, wl.a.y, wl.b.y)
+    }
+    for (const fr of floor.furniture) {
+      minX = Math.min(minX, fr.position.x); maxX = Math.max(maxX, fr.position.x + fr.size.w)
+      minY = Math.min(minY, fr.position.y); maxY = Math.max(maxY, fr.position.y + fr.size.d)
+    }
+    if (!isFinite(minX)) return
+    const pad = 60
+    const nextScale = Math.min(width / ((maxX - minX) + pad * 2), height / ((maxY - minY) + pad * 2), 5)
+    const clamped = Math.max(0.3, nextScale)
+    const cx = (minX + maxX) / 2
+    const cy = (minY + maxY) / 2
+    setScale(clamped)
+    setOffset({ x: width / 2 - cx * clamped, y: height / 2 - cy * clamped })
+  }, [floor, width, height])
+
   // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement).tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA') return
       const ctrl = e.ctrlKey || e.metaKey
-      const selFurniture = selectedId && floor.furniture.some(f => f.id === selectedId)
+      // Resolve furniture selection (single or multi) against the active floor.
+      const selFurnIds = selectedIds.filter(id => floor.furniture.some(f => f.id === id))
+      const hasFurnSel = selFurnIds.length > 0
 
-      // Duplicate selected furniture (Ctrl/Cmd+D)
-      if (ctrl && (e.key === 'd' || e.key === 'D') && selFurniture) {
+      // Ctrl+D / Ctrl+C / Ctrl+V
+      if (ctrl && (e.key === 'd' || e.key === 'D') && hasFurnSel) {
         e.preventDefault()
-        duplicateFurniture(selectedId!)
+        selFurnIds.forEach(id => duplicateFurniture(id))
+        return
+      }
+      if (ctrl && (e.key === 'c' || e.key === 'C') && hasFurnSel) {
+        e.preventDefault()
+        copySelection()
+        return
+      }
+      if (ctrl && (e.key === 'v' || e.key === 'V')) {
+        e.preventDefault()
+        pasteClipboard()
         return
       }
       if (ctrl) return // leave other Ctrl combos (undo/redo) to the global handler
 
       if (e.key === 'w' || e.key === 'W') setActiveTool('wall')
       if (e.key === 'v' || e.key === 'V') setActiveTool('select')
+      if (e.key === 'f' || e.key === 'F') fitToView()
+      if (e.key === 'm' || e.key === 'M') {
+        setMeasureMode(prev => {
+          if (prev) setMeasureStart(null)
+          return !prev
+        })
+        setActiveTool('select')
+      }
       if (e.key === 'Escape') {
         setActiveTool('select')
         setDrawStart(null)
+        setMeasureMode(false); setMeasureStart(null)
+        setMarquee(null)
       }
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) {
         if (floor.walls.some(w => w.id === selectedId)) deleteWall(selectedId)
-        else if (selFurniture) deleteFurniture(selectedId)
+        else if (hasFurnSel) selFurnIds.forEach(id => deleteFurniture(id))
         else if (floor.openings.some(o => o.id === selectedId)) deleteOpening(selectedId)
       }
-      if ((e.key === 'r' || e.key === 'R') && selFurniture) {
-        rotateFurniture(selectedId!, Math.PI / 2)
+      if ((e.key === 'r' || e.key === 'R') && hasFurnSel) {
+        selFurnIds.forEach(id => rotateFurniture(id, Math.PI / 2))
       }
-      // Arrow-key nudge for selected furniture
-      if (selFurniture && e.key.startsWith('Arrow')) {
+      // Arrow-key nudge for selected furniture (all in multi-selection)
+      if (hasFurnSel && e.key.startsWith('Arrow')) {
         e.preventDefault()
         const step = snapEnabled ? gridSize : 1
         const dx = e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0
         const dy = e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0
-        if (dx || dy) nudgeFurniture(selectedId!, dx, dy)
+        if (dx || dy) selFurnIds.forEach(id => nudgeFurniture(id, dx, dy))
       }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
     // floor.walls/furniture/openings are read via `floor` (a closure on the active floor) — re-binding on every tiny change is undesirable.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId, snapEnabled, gridSize, setActiveTool, deleteWall, deleteFurniture, deleteOpening, rotateFurniture, duplicateFurniture, nudgeFurniture])
+  }, [selectedId, selectedIds, snapEnabled, gridSize, mousePos, fitToView, setActiveTool, deleteWall, deleteFurniture, deleteOpening, rotateFurniture, duplicateFurniture, nudgeFurniture, copySelection, pasteClipboard])
 
   const getStageMousePos = useCallback((): Vec2 => {
     const stage = stageRef.current
@@ -146,6 +197,14 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
       return
     }
 
+    // Measurement mode swallows clicks before tool/selection logic.
+    if (measureMode) {
+      const cm = getSnappedCmPos(pos)
+      if (!measureStart) setMeasureStart(cm)
+      else setMeasureStart(null) // 2nd click clears (esc-or-click-again to restart)
+      return
+    }
+
     if (activeTool === 'wall') {
       const cm = getSnappedCmPos(pos)
       if (!drawStart) {
@@ -157,14 +216,16 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
         setDrawStart(cm)
       }
     } else {
-      // Select tool: clicking background deselects
+      // Select tool: clicking background starts a marquee selection.
       const target = e.target
       const stage = stageRef.current
       if (target === stage || target.name() === 'grid' || target.name() === 'floor') {
-        setSelected(null)
+        const cm = stagePosToCm(pos.x, pos.y, offset, scale)
+        setMarquee({ a: cm, b: cm })
+        if (!e.evt.shiftKey) setSelected(null)
       }
     }
-  }, [activeTool, drawStart, getStageMousePos, getSnappedCmPos, addWall, offset, setSelected])
+  }, [activeTool, drawStart, measureMode, measureStart, getStageMousePos, getSnappedCmPos, addWall, offset, scale, setSelected])
 
   const handleStageMouseMove = useCallback(() => {
     const pos = getStageMousePos()
@@ -179,14 +240,46 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
 
     const cm = getSnappedCmPos(pos)
     setMousePos(cm)
-  }, [isPanning, panStart, getStageMousePos, getSnappedCmPos])
+
+    // Marquee drag — update its second corner with raw (un-snapped) cm position.
+    if (marquee) {
+      const rawCm = stagePosToCm(pos.x, pos.y, offset, scale)
+      setMarquee({ a: marquee.a, b: rawCm })
+    }
+  }, [isPanning, panStart, marquee, offset, scale, getStageMousePos, getSnappedCmPos])
 
   const handleStageMouseUp = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
     if (e.evt.button === 1 || e.evt.button === 2) {
       setIsPanning(false)
       setPanStart(null)
     }
-  }, [])
+    // Commit marquee selection on left-up. Anything bigger than a tiny click counts.
+    if (marquee && e.evt.button === 0) {
+      const dx = marquee.b.x - marquee.a.x
+      const dy = marquee.b.y - marquee.a.y
+      if (Math.hypot(dx, dy) > 4) {
+        const minX = Math.min(marquee.a.x, marquee.b.x)
+        const maxX = Math.max(marquee.a.x, marquee.b.x)
+        const minY = Math.min(marquee.a.y, marquee.b.y)
+        const maxY = Math.max(marquee.a.y, marquee.b.y)
+        const hits = floor.furniture.filter(f => {
+          // Treat furniture as enclosed if its footprint is fully inside the marquee.
+          return f.position.x >= minX
+            && f.position.y >= minY
+            && f.position.x + f.size.w <= maxX
+            && f.position.y + f.size.d <= maxY
+        }).map(f => f.id)
+        if (e.evt.shiftKey) {
+          // Merge with current selection.
+          const merged = Array.from(new Set([...selectedIds, ...hits]))
+          setSelectedIds(merged)
+        } else {
+          setSelectedIds(hits)
+        }
+      }
+      setMarquee(null)
+    }
+  }, [marquee, floor.furniture, selectedIds, setSelectedIds])
 
   const handleDblClick = useCallback(() => {
     if (activeTool === 'wall') {
@@ -429,7 +522,12 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
             const cx = cmToStagePos({ x: f.position.x + f.size.w / 2, y: f.position.y + f.size.d / 2 }, offset, scale)
             const pw = cmToPx(f.size.w, scale)
             const pd = cmToPx(f.size.d, scale)
-            const isSelected = selectedId === f.id
+            const isPrimary = selectedId === f.id
+            const isInMulti = selectedIds.includes(f.id)
+            const handleSelect = (shift: boolean) => {
+              if (shift) toggleSelected(f.id)
+              else setSelected(f.id)
+            }
 
             return (
               <Group
@@ -438,10 +536,10 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
                 y={cx.y}
                 rotation={(f.rotation * 180) / Math.PI}
                 draggable={activeTool === 'select'}
-                onMouseDown={e => { e.cancelBubble = true; setSelected(f.id) }}
-                onTap={e => { e.cancelBubble = true; setSelected(f.id) }}
-                onClick={e => { e.cancelBubble = true; setSelected(f.id) }}
-                onDragStart={e => { e.cancelBubble = true; setSelected(f.id) }}
+                onMouseDown={e => { e.cancelBubble = true; handleSelect(e.evt.shiftKey) }}
+                onTap={e => { e.cancelBubble = true; handleSelect(false) }}
+                onClick={e => { e.cancelBubble = true; handleSelect(e.evt.shiftKey) }}
+                onDragStart={e => { e.cancelBubble = true }}
                 onDragMove={e => {
                   e.cancelBubble = true
                   const node = e.target
@@ -453,7 +551,6 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
                       x: Math.round(topLeft.x / gridSize) * gridSize,
                       y: Math.round(topLeft.y / gridSize) * gridSize,
                     }
-                    // keep the Konva node in sync with the snapped position
                     const snappedCenter = cmToStagePos(
                       { x: topLeft.x + f.size.w / 2, y: topLeft.y + f.size.d / 2 },
                       offset,
@@ -461,7 +558,20 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
                     )
                     node.position(snappedCenter)
                   }
-                  moveFurniture(f.id, topLeft)
+                  // Group-drag: when multiple are selected and the dragged one is part of it,
+                  // nudge the others by the same delta.
+                  const dx = topLeft.x - f.position.x
+                  const dy = topLeft.y - f.position.y
+                  if (selectedIds.length > 1 && selectedIds.includes(f.id)) {
+                    selectedIds.forEach(id => {
+                      const other = floor.furniture.find(x => x.id === id)
+                      if (!other) return
+                      if (id === f.id) moveFurniture(id, topLeft)
+                      else moveFurniture(id, { x: other.position.x + dx, y: other.position.y + dy })
+                    })
+                  } else {
+                    moveFurniture(f.id, topLeft)
+                  }
                 }}
               >
                 <Rect
@@ -471,8 +581,8 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
                   height={pd}
                   fill={f.color ?? cat.color}
                   opacity={0.85}
-                  stroke={isSelected ? '#60a5fa' : '#fff'}
-                  strokeWidth={isSelected ? 2 : 0.5}
+                  stroke={isPrimary ? '#60a5fa' : isInMulti ? '#3b82f6' : '#fff'}
+                  strokeWidth={isPrimary || isInMulti ? 2 : 0.5}
                   cornerRadius={3}
                 />
                 {scale > 0.6 && (
@@ -492,6 +602,39 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
               </Group>
             )
           })}
+        </Layer>
+
+        {/* Marquee + measurement overlay */}
+        <Layer listening={false}>
+          {marquee && (() => {
+            const a = cmToStagePos(marquee.a, offset, scale)
+            const b = cmToStagePos(marquee.b, offset, scale)
+            return (
+              <Rect
+                x={Math.min(a.x, b.x)}
+                y={Math.min(a.y, b.y)}
+                width={Math.abs(b.x - a.x)}
+                height={Math.abs(b.y - a.y)}
+                fill="#60a5fa"
+                opacity={0.15}
+                stroke="#60a5fa"
+                strokeWidth={1}
+                dash={[4, 4]}
+              />
+            )
+          })()}
+
+          {measureMode && measureStart && (() => {
+            const a = cmToStagePos(measureStart, offset, scale)
+            const b = cmToStagePos(mousePos, offset, scale)
+            return (
+              <>
+                <Line points={[a.x, a.y, b.x, b.y]} stroke="#f97316" strokeWidth={2} dash={[6, 4]} />
+                <Circle x={a.x} y={a.y} radius={4} fill="#f97316" />
+                <Circle x={b.x} y={b.y} radius={4} fill="#f97316" />
+              </>
+            )
+          })()}
         </Layer>
       </Stage>
 
@@ -529,9 +672,70 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
         )
       })()}
 
+      {/* Measurement readout */}
+      {measureMode && measureStart && (() => {
+        const distCm = Math.hypot(mousePos.x - measureStart.x, mousePos.y - measureStart.y)
+        const mid = cmToStagePos(
+          { x: (measureStart.x + mousePos.x) / 2, y: (measureStart.y + mousePos.y) / 2 },
+          offset, scale,
+        )
+        return (
+          <>
+            <div
+              className="absolute pointer-events-none -translate-x-1/2 -translate-y-1/2 bg-orange-500 text-white font-bold rounded-lg px-3 py-1 shadow-lg tabular-nums"
+              style={{ left: mid.x, top: mid.y - 28, fontSize: 18 }}
+            >
+              {distCm < 100 ? `${Math.round(distCm)} cm` : `${(distCm / 100).toFixed(2)} m`}
+            </div>
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-gray-900/80 text-orange-300 text-xs px-3 py-1.5 rounded-full border border-gray-700 pointer-events-none">
+              📏 Measuring · Click two points · Esc or M to exit
+            </div>
+          </>
+        )
+      })()}
+
+      {/* Fit to view button (only when there's something to fit) */}
+      {(floor.walls.length > 0 || floor.furniture.length > 0) && (
+        <button
+          onClick={fitToView}
+          title="Fit to view (F)"
+          className="absolute top-2 right-3 px-2 py-1 text-xs bg-gray-800/90 text-gray-300 hover:bg-gray-700 rounded-lg border border-gray-700 backdrop-blur-sm"
+        >
+          ⛶ Fit
+        </button>
+      )}
+
+      {/* Multi-select count + align bar */}
+      {selectedIds.length > 1 && (
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 flex items-center gap-1 px-2 py-1.5 bg-gray-900/90 border border-gray-700 rounded-lg backdrop-blur-sm text-xs">
+          <span className="text-blue-300 font-medium px-1.5">{selectedIds.length} selected</span>
+          <AlignBar />
+        </div>
+      )}
+
       <div className="absolute bottom-2 right-3 text-[10px] text-gray-700 pointer-events-none">
-        {Math.round(scale * 100)}% · Scroll to zoom · Middle-drag to pan
+        {Math.round(scale * 100)}% · Scroll zoom · Middle-drag pan · Shift-click multi
       </div>
     </div>
+  )
+}
+
+function AlignBar() {
+  const { alignSelected, distributeSelected } = useDesignStore()
+  const btn = 'px-1.5 py-0.5 rounded hover:bg-gray-700 text-gray-300'
+  return (
+    <>
+      <div className="w-px h-4 bg-gray-700 mx-0.5" />
+      <button className={btn} title="Align left" onClick={() => alignSelected('left')}>⇤</button>
+      <button className={btn} title="Center vertically" onClick={() => alignSelected('vcenter')}>⇼</button>
+      <button className={btn} title="Align right" onClick={() => alignSelected('right')}>⇥</button>
+      <div className="w-px h-4 bg-gray-700 mx-0.5" />
+      <button className={btn} title="Align top" onClick={() => alignSelected('top')}>⤒</button>
+      <button className={btn} title="Center horizontally" onClick={() => alignSelected('hcenter')}>⇿</button>
+      <button className={btn} title="Align bottom" onClick={() => alignSelected('bottom')}>⤓</button>
+      <div className="w-px h-4 bg-gray-700 mx-0.5" />
+      <button className={btn} title="Distribute horizontally" onClick={() => distributeSelected('horizontal')}>↔</button>
+      <button className={btn} title="Distribute vertically" onClick={() => distributeSelected('vertical')}>↕</button>
+    </>
   )
 }
