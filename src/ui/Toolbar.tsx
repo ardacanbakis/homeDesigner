@@ -1,6 +1,8 @@
 import { useEffect } from 'react'
 import { useDesignStore, useTemporalStore, useActiveFloor } from '../store/design'
 import { exportJSON, importJSON } from '../persistence/storage'
+import { deriveRooms } from '../geometry/rooms'
+import { useMemo } from 'react'
 
 export function Toolbar() {
   const {
@@ -13,6 +15,7 @@ export function Toolbar() {
   const { pastStates, futureStates } = useTemporalStore()
   const canUndo = pastStates.length > 0
   const canRedo = futureStates.length > 0
+  const rooms = useMemo(() => deriveRooms(floor.walls), [floor.walls])
 
   const handleExport = () => exportJSON(design)
   const handleImport = async () => {
@@ -118,7 +121,7 @@ export function Toolbar() {
       </div>
 
       <div className="text-[10px] text-gray-600 font-mono tabular-nums ml-1">
-        {floor.walls.length}w · {floor.furniture.length}f
+        {floor.walls.length}w · {floor.furniture.length}f{rooms.length > 0 && ` · ${rooms.length}r`}
       </div>
     </div>
   )

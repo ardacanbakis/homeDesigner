@@ -5,6 +5,7 @@ import * as THREE from 'three'
 import { useDesignStore, floorElevations } from '../store/design'
 import { Walls3D } from './Walls3D'
 import { Furniture3D } from './Furniture3D'
+import { Rooms3D } from './Rooms3D'
 import { designBounds, m } from './units'
 import type { Design } from '../store/types'
 
@@ -138,6 +139,7 @@ function SceneContent() {
         const interactive = floor.id === activeFloorId
         return (
           <group key={floor.id}>
+            {interactive && <Rooms3D walls={floor.walls} elevation={elevations[i]} />}
             <Walls3D walls={floor.walls} openings={floor.openings} elevation={elevations[i]} interactive={interactive} />
             <Furniture3D furniture={floor.furniture} elevation={elevations[i]} interactive={interactive} />
           </group>

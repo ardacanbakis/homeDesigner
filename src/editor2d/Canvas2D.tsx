@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Stage, Layer, Line, Rect, Circle, Text, Group, Arrow } from 'react-konva'
 import type Konva from 'konva'
 import { useDesignStore, useActiveFloor } from '../store/design'
 import { snapPoint, wallLength, wallAngle } from '../geometry/walls'
+import { deriveRooms, classifyRoom, roomColor } from '../geometry/rooms'
 import { CATALOG_MAP } from '../geometry/catalog'
 import type { Vec2 } from '../store/types'
 
@@ -64,6 +65,9 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
 
   // Marquee (rubber-band) selection — drag on empty space with select tool
   const [marquee, setMarquee] = useState<{ a: Vec2; b: Vec2 } | null>(null)
+
+  // Derived rooms — recomputed only when walls change.
+  const rooms = useMemo(() => deriveRooms(floor.walls), [floor.walls])
 
   /** Frame all walls + furniture on the active floor with padding. */
   const fitToView = useCallback(() => {
@@ -361,6 +365,39 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
         <Layer listening={false}>
           <Rect name="floor" x={0} y={0} width={width} height={height} fill="#12121e" />
           {gridLines()}
+        </Layer>
+
+        {/* Rooms layer: subtle fills + label + m² */}
+        <Layer listening={false}>
+          {rooms.map(room => {
+            const label = classifyRoom(room, floor.furniture)
+            const fill = roomColor(room.id)
+            const pts: number[] = []
+            for (const v of room.vertices) {
+              const sp = cmToStagePos(v, offset, scale)
+              pts.push(sp.x, sp.y)
+            }
+            const c = cmToStagePos(room.centroid, offset, scale)
+            const areaM2 = (room.area / 10000).toFixed(1)
+            return (
+              <Group key={room.id}>
+                <Line points={pts} closed fill={fill} opacity={0.10} />
+                {scale > 0.4 && (
+                  <Text
+                    x={c.x - 60}
+                    y={c.y - 14}
+                    width={120}
+                    text={`${label}\n${areaM2} m²`}
+                    align="center"
+                    fontSize={12}
+                    fontStyle="bold"
+                    fill="#cbd5e1"
+                    opacity={0.85}
+                  />
+                )}
+              </Group>
+            )
+          })}
         </Layer>
 
         {/* Ghost of the floor below, to help align rooms */}
