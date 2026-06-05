@@ -5,13 +5,16 @@ import { nanoid } from 'nanoid'
 import { CATALOG_MAP } from '../geometry/catalog'
 import { saveDesign, loadDesign, CURRENT_VERSION } from '../persistence/storage'
 import { wallLength } from '../geometry/walls'
-import type { Wall, Opening, Furniture, FurnitureKind, Vec2, Design, Floor, ViewMode, ActiveTool } from './types'
+import type { Wall, Opening, Furniture, FurnitureKind, Vec2, Design, Floor, ViewMode, ActiveTool, CameraMode } from './types'
 
 type State = {
   design: Design
   activeFloorId: string
   viewMode: ViewMode
   activeTool: ActiveTool
+  cameraMode: CameraMode
+  /** Hide non-active floors in 3D when true. */
+  isolateActiveFloor: boolean
   selectedId: string | null
   /** Additional selected furniture IDs (selectedId is the primary).
    *  Multi-selection only applies to furniture on the active floor. */
@@ -27,6 +30,8 @@ type State = {
 type Actions = {
   setViewMode: (m: ViewMode) => void
   setActiveTool: (t: ActiveTool) => void
+  setCameraMode: (m: CameraMode) => void
+  toggleFloorIsolation: () => void
   setSelected: (id: string | null) => void
   /** Replace the multi-selection. The first id (if any) also becomes selectedId. */
   setSelectedIds: (ids: string[]) => void
@@ -125,6 +130,8 @@ const useDesignStoreBase = create<State & Actions>()(
         activeFloorId: initial.floors[0].id,
         viewMode: '2d' as ViewMode,
         activeTool: 'select' as ActiveTool,
+        cameraMode: 'orbit' as CameraMode,
+        isolateActiveFloor: false,
         selectedId: null as string | null,
         selectedIds: [] as string[],
         clipboard: [] as Furniture[],
@@ -135,6 +142,8 @@ const useDesignStoreBase = create<State & Actions>()(
 
         setViewMode: m => set({ viewMode: m }),
         setActiveTool: t => set({ activeTool: t }),
+        setCameraMode: m => set({ cameraMode: m }),
+        toggleFloorIsolation: () => set(s => ({ isolateActiveFloor: !s.isolateActiveFloor })),
         setSelected: id => set({ selectedId: id, selectedIds: id ? [id] : [] }),
         setSelectedIds: ids => set({ selectedIds: ids, selectedId: ids[0] ?? null }),
         toggleSelected: id => {

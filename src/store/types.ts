@@ -63,3 +63,5 @@ export type Design = {
 export type ViewMode = '2d' | '3d'
 
 export type ActiveTool = 'select' | 'wall'
+
+export type CameraMode = 'orbit' | 'walk' | 'top' | 'front' | 'iso'
