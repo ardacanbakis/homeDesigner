@@ -1,4 +1,8 @@
-import { TEMPLATES, TEMPLATE_CATEGORIES, type TemplateMeta } from '../persistence/templates'
+import { useState } from 'react'
+import {
+  TEMPLATES, TEMPLATE_CATEGORIES,
+  loadUserTemplates, deleteUserTemplate, type UserTemplate,
+} from '../persistence/templates'
 import type { Design } from '../store/types'
 
 /** Min/max bounds (cm) of a design's first-floor walls. */
@@ -69,35 +73,52 @@ function FloorPreview({ design, accent, dark }: { design: Design; accent: string
   )
 }
 
-function TemplateCard({ tpl, dark, accent, onPick }: {
-  tpl: TemplateMeta; dark: boolean; accent: string; onPick: (d: Design) => void
+function TemplateCard({ tpl, design, dark, accent, onPick, onDelete }: {
+  tpl: { name: string; description: string; icon: string; rooms: string }
+  design: Design
+  dark: boolean
+  accent: string
+  onPick: (d: Design) => void
+  /** When present, renders a small delete button on the card (user templates only). */
+  onDelete?: () => void
 }) {
-  const design = tpl.build()
   const cardBg = dark
     ? 'bg-gray-900/70 border-gray-700/60 hover:border-gray-500'
     : 'bg-white/85 border-gray-200 hover:border-gray-400 shadow-sm'
   const previewBg = dark ? 'bg-[#0d1320]' : 'bg-slate-100'
 
   return (
-    <button
-      onClick={() => onPick(design)}
-      className={`group text-left rounded-xl border overflow-hidden transition-all hover:-translate-y-0.5 ${cardBg}`}
-    >
-      <div className={`h-28 ${previewBg} p-2 border-b ${dark ? 'border-gray-800' : 'border-gray-100'}`}>
-        <FloorPreview design={design} accent={accent} dark={dark} />
-      </div>
-      <div className="p-3">
-        <div className="flex items-center gap-2">
-          <span className="text-base leading-none">{tpl.icon}</span>
-          <h4 className={`text-sm font-semibold ${dark ? 'text-white' : 'text-gray-900'}`}>{tpl.name}</h4>
+    <div className={`group relative text-left rounded-xl border overflow-hidden transition-all hover:-translate-y-0.5 ${cardBg}`}>
+      <button
+        onClick={() => onPick(design)}
+        className="w-full text-left"
+      >
+        <div className={`h-28 ${previewBg} p-2 border-b ${dark ? 'border-gray-800' : 'border-gray-100'}`}>
+          <FloorPreview design={design} accent={accent} dark={dark} />
         </div>
-        <p className={`text-[11px] mt-1 leading-snug ${dark ? 'text-gray-400' : 'text-gray-600'}`}>{tpl.description}</p>
-        <div className={`mt-2 flex items-center justify-between text-[10px] font-mono ${dark ? 'text-gray-500' : 'text-gray-400'}`}>
-          <span className="truncate">{tpl.rooms}</span>
-          <span className="shrink-0 ml-2" style={{ color: accent }}>{footprintLabel(design)}</span>
+        <div className="p-3">
+          <div className="flex items-center gap-2">
+            <span className="text-base leading-none">{tpl.icon}</span>
+            <h4 className={`text-sm font-semibold ${dark ? 'text-white' : 'text-gray-900'}`}>{tpl.name}</h4>
+          </div>
+          <p className={`text-[11px] mt-1 leading-snug ${dark ? 'text-gray-400' : 'text-gray-600'}`}>{tpl.description}</p>
+          <div className={`mt-2 flex items-center justify-between text-[10px] font-mono ${dark ? 'text-gray-500' : 'text-gray-400'}`}>
+            <span className="truncate">{tpl.rooms}</span>
+            <span className="shrink-0 ml-2" style={{ color: accent }}>{footprintLabel(design)}</span>
+          </div>
         </div>
-      </div>
-    </button>
+      </button>
+      {onDelete && (
+        <button
+          onClick={onDelete}
+          title="Delete this saved template"
+          className={`absolute top-1.5 right-1.5 w-6 h-6 rounded-md text-xs opacity-0 group-hover:opacity-100 transition-opacity ${
+            dark ? 'bg-gray-800/90 text-gray-400 hover:text-red-400 hover:bg-gray-700'
+                 : 'bg-white text-gray-400 hover:text-red-500 hover:bg-gray-100 border border-gray-200'
+          }`}
+        >🗑</button>
+      )}
+    </div>
   )
 }
 
@@ -107,9 +128,53 @@ export function TemplateGallery({ dark, accent, onPick, onBlank }: {
   onPick: (d: Design) => void
   onBlank: () => void
 }) {
+  // User templates live in localStorage. Bump this counter to re-read after a delete.
+  const [userTplsTick, setUserTplsTick] = useState(0)
+  const userTpls: UserTemplate[] = (() => {
+    void userTplsTick // force re-read when counter changes
+    return loadUserTemplates()
+  })()
+
   return (
     <div className="space-y-5">
       {TEMPLATE_CATEGORIES.map(cat => {
+        if (cat.id === 'custom') {
+          if (userTpls.length === 0) return null
+          return (
+            <div key={cat.id}>
+              <div className={`flex items-center gap-2 mb-2 text-xs font-semibold uppercase tracking-wider ${dark ? 'text-gray-400' : 'text-gray-500'}`}>
+                <span className="text-sm">{cat.icon}</span>
+                {cat.label}
+              </div>
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                {userTpls.map(t => {
+                  const created = new Date(t.createdAt).toLocaleDateString()
+                  return (
+                    <TemplateCard
+                      key={t.id}
+                      tpl={{
+                        name: t.name,
+                        description: `Saved on ${created}.`,
+                        icon: '⭐',
+                        rooms: `${t.design.floors.length} floor${t.design.floors.length === 1 ? '' : 's'}`,
+                      }}
+                      design={t.design}
+                      dark={dark}
+                      accent={accent}
+                      onPick={onPick}
+                      onDelete={() => {
+                        if (confirm(`Delete saved template "${t.name}"?`)) {
+                          deleteUserTemplate(t.id)
+                          setUserTplsTick(n => n + 1)
+                        }
+                      }}
+                    />
+                  )
+                })}
+              </div>
+            </div>
+          )
+        }
         const items = TEMPLATES.filter(t => t.category === cat.id)
         if (!items.length) return null
         return (
@@ -120,7 +185,14 @@ export function TemplateGallery({ dark, accent, onPick, onBlank }: {
             </div>
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
               {items.map(tpl => (
-                <TemplateCard key={tpl.id} tpl={tpl} dark={dark} accent={accent} onPick={onPick} />
+                <TemplateCard
+                  key={tpl.id}
+                  tpl={tpl}
+                  design={tpl.build()}
+                  dark={dark}
+                  accent={accent}
+                  onPick={onPick}
+                />
               ))}
             </div>
           </div>

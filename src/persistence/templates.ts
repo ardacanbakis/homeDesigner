@@ -264,9 +264,208 @@ function officeSuite(): Design {
   return design('Office Suite', walls, openings, furniture)
 }
 
+/** Open-plan loft: one big room with a sleeping nook + bathroom. ~7.0 × 5.0 m */
+function loft(): Design {
+  const o = outer(40, 40, 740, 540)
+  // Bathroom carved into the top-right (540-740 × 40-220)
+  const bathV = w(540, 40, 540, 220)
+  const bathH = w(540, 220, 740, 220)
+  // Half-height wall partitioning the sleeping nook (bottom-left)
+  const sleepV = w(280, 380, 280, 540)
+  const walls = [o.n, o.e, o.s, o.w, bathV, bathH, sleepV]
+
+  const openings = [
+    door(o.w, 420, 100),
+    door(bathV, 80, 80),
+    win(o.n, 100, 200, 140, 90),
+    win(o.n, 380, 140, 120, 90),
+    win(o.s, 360, 180, 140, 90),
+    win(o.e, 320, 140, 130, 90),
+  ]
+
+  const furniture = [
+    // Living (center-right)
+    f('sofa', 320, 80, { w: 220, d: 95 }),
+    f('table', 360, 200, { w: 130, d: 75 }),
+    f('tv', 320, 280, { w: 140, d: 15 }),
+    f('chair', 530, 250),
+    // Kitchen (left strip)
+    f('fridge', 60, 70),
+    f('stove', 140, 70),
+    f('sink', 215, 75, { w: 60, d: 50 }),
+    f('table', 60, 200, { w: 200, d: 80 }),
+    f('chair', 90, 290),
+    f('chair', 180, 290),
+    // Sleeping nook (bottom-left)
+    f('bed', 60, 410, { w: 160, d: 200 }),
+    f('dresser', 60, 380, { w: 100, d: 40 }),
+    // Bathroom
+    f('toilet', 560, 60),
+    f('bathtub', 640, 60, { w: 80, d: 150 }),
+  ]
+  return design('Loft', walls, openings, furniture)
+}
+
+/** Tiny house: a single 4×5 m room with stairs to a sleeping loft. */
+function tinyHouse(): Design {
+  const o = outer(40, 40, 440, 540)
+  const walls = [o.n, o.e, o.s, o.w]
+
+  const openings = [
+    door(o.s, 170, 90),
+    win(o.n, 130, 140, 120, 90),
+    win(o.e, 200, 120, 120, 90),
+    win(o.w, 200, 120, 120, 90),
+  ]
+
+  const furniture = [
+    // Kitchenette north
+    f('fridge', 60, 60),
+    f('stove', 140, 60),
+    f('sink', 220, 65, { w: 60, d: 50 }),
+    // Living
+    f('sofa', 60, 200, { w: 180, d: 85 }),
+    f('table', 270, 220, { w: 100, d: 60 }),
+    // Bath strip
+    f('toilet', 320, 360),
+    f('bathtub', 60, 380, { w: 80, d: 140 }),
+    // Stairs to loft
+    f('stairs', 220, 380, { w: 100, d: 140 }),
+  ]
+  return design('Tiny House', walls, openings, furniture)
+}
+
+/** Two-storey house: ground floor (living + kitchen) and upper floor
+ *  (bedrooms + bath), connected via stairs. */
+function twoStoreyHouse(): Design {
+  // ─ Ground floor ──────────────────────────────────────────────────────────
+  const g = outer(40, 40, 740, 540)
+  const gDiv = w(420, 40, 420, 380) // living | kitchen
+  const gStairsV = w(420, 380, 420, 540) // continues to enclose stairs
+  const gStairsH = w(420, 380, 580, 380) // top of stairs wall
+  const groundWalls = [g.n, g.e, g.s, g.w, gDiv, gStairsV, gStairsH]
+  const groundOpenings = [
+    door(g.w, 380, 100),
+    door(gDiv, 100, 100),
+    win(g.n, 130, 150),
+    win(g.n, 500, 150),
+    win(g.s, 160, 140),
+    win(g.e, 200, 140),
+  ]
+  const groundFurniture: Furniture[] = [
+    // Living
+    f('sofa', 80, 240, { w: 220, d: 95 }),
+    f('table', 140, 140, { w: 130, d: 70 }),
+    f('tv', 80, 70, { w: 140, d: 15 }),
+    f('chair', 320, 250),
+    // Kitchen
+    f('fridge', 660, 60),
+    f('stove', 580, 60),
+    f('sink', 500, 65, { w: 60, d: 50 }),
+    f('table', 460, 200, { w: 140, d: 80 }),
+    f('chair', 480, 150),
+    f('chair', 480, 290, { rot: Math.PI }),
+    // Stairs up
+    f('stairs', 440, 400, { w: 130, d: 130 }),
+  ]
+  const groundFloor: Floor = {
+    id: nanoid(),
+    name: 'Ground Floor',
+    height: 280,
+    walls: groundWalls,
+    openings: groundOpenings,
+    furniture: groundFurniture,
+  }
+
+  // ─ Upper floor (same outer footprint, different layout) ─────────────────
+  const u = outer(40, 40, 740, 540)
+  const uHall = w(40, 280, 740, 280)
+  const uBed = w(340, 40, 340, 280)
+  const uBath = w(560, 280, 560, 540)
+  const upperWalls = [u.n, u.e, u.s, u.w, uHall, uBed, uBath]
+  const upperOpenings = [
+    door(uHall, 150, 90),
+    door(uHall, 450, 90),
+    door(uBath, 60, 80),
+    win(u.n, 130, 150),
+    win(u.n, 500, 150),
+    win(u.s, 100, 150),
+    win(u.s, 460, 150),
+  ]
+  const upperFurniture: Furniture[] = [
+    // Master (top-left)
+    f('bed', 90, 80, { w: 180, d: 210 }),
+    f('wardrobe', 90, 220, { w: 140, d: 55 }),
+    // Kid's room (top-right)
+    f('bed', 380, 80, { w: 140, d: 200 }),
+    f('dresser', 580, 80),
+    // Bathroom (bottom-right)
+    f('toilet', 580, 300),
+    f('bathtub', 660, 320, { w: 70, d: 150 }),
+    // Hall (bottom-left)
+    f('stairs', 440, 380, { w: 130, d: 130 }), // matching stairwell
+  ]
+  const upperFloor: Floor = {
+    id: nanoid(),
+    name: 'Upper Floor',
+    height: 280,
+    walls: upperWalls,
+    openings: upperOpenings,
+    furniture: upperFurniture,
+  }
+
+  return { version: CURRENT_VERSION, floors: [groundFloor, upperFloor] }
+}
+
+/** Coffee shop: customer area, bar, kitchen, restroom. ~7.5 × 5 m */
+function coffeeShop(): Design {
+  const o = outer(40, 40, 790, 540)
+  const barV = w(40, 320, 580, 320)     // back-of-house divider (kitchen behind)
+  const kitchenV = w(580, 40, 580, 320) // kitchen / restroom partition
+  const restroomH = w(580, 200, 790, 200)
+  const walls = [o.n, o.e, o.s, o.w, barV, kitchenV, restroomH]
+
+  const openings = [
+    door(o.s, 350, 110),
+    door(barV, 200, 90),
+    door(kitchenV, 100, 80),
+    door(restroomH, 90, 70),
+    win(o.s, 100, 200, 140, 90),
+    win(o.s, 540, 200, 140, 90),
+    win(o.w, 200, 180, 140, 90),
+  ]
+
+  const furniture: Furniture[] = [
+    // Customer seating (bottom area)
+    f('table', 80, 360, { w: 80, d: 80 }),
+    f('chair', 95, 325, { w: 40, d: 40 }),
+    f('chair', 95, 445, { w: 40, d: 40, rot: Math.PI }),
+    f('table', 220, 360, { w: 80, d: 80 }),
+    f('chair', 235, 325, { w: 40, d: 40 }),
+    f('chair', 235, 445, { w: 40, d: 40, rot: Math.PI }),
+    f('table', 360, 360, { w: 80, d: 80 }),
+    f('chair', 375, 325, { w: 40, d: 40 }),
+    f('chair', 375, 445, { w: 40, d: 40, rot: Math.PI }),
+    f('sofa', 60, 460, { w: 280, d: 70 }),
+    // Bar / counter (above the divider, customer side)
+    f('table', 80, 250, { w: 450, d: 55 }),
+    // Kitchen (top-left of barV)
+    f('fridge', 60, 60),
+    f('stove', 140, 60),
+    f('sink', 220, 65, { w: 60, d: 50 }),
+    f('table', 300, 80, { w: 200, d: 70 }),
+    // Restroom (top-right)
+    f('toilet', 600, 60),
+    f('sink', 700, 60, { w: 60, d: 45 }),
+    // Storage (bottom of restroom column)
+    f('dresser', 600, 240),
+  ]
+  return design('Coffee Shop', walls, openings, furniture)
+}
+
 // ─── Registry ────────────────────────────────────────────────────────────────
 
-export type TemplateCategory = 'apartment' | 'house' | 'workspace'
+export type TemplateCategory = 'apartment' | 'house' | 'workspace' | 'custom'
 
 export type TemplateMeta = {
   id: string
@@ -282,55 +481,57 @@ export const TEMPLATE_CATEGORIES: { id: TemplateCategory; label: string; icon: s
   { id: 'apartment', label: 'Apartments', icon: '🏢' },
   { id: 'house', label: 'Houses', icon: '🏡' },
   { id: 'workspace', label: 'Workspaces', icon: '🏬' },
+  { id: 'custom', label: 'My Templates', icon: '⭐' },
 ]
 
 export const TEMPLATES: TemplateMeta[] = [
-  {
-    id: 'studio',
-    name: 'Studio',
-    description: 'Compact open-plan living with a corner bathroom — perfect for a first sketch.',
-    category: 'apartment',
-    icon: '🛏️',
-    rooms: 'Open plan · 1 bath',
-    build: studio,
-  },
-  {
-    id: 'one-bed',
-    name: '1-Bedroom Apartment',
-    description: 'Open living/kitchen with a separate bedroom and full bathroom.',
-    category: 'apartment',
-    icon: '🛋️',
-    rooms: 'Living · Kitchen · 1 bed · 1 bath',
-    build: oneBed,
-  },
-  {
-    id: 'two-bed',
-    name: '2-Bedroom Apartment',
-    description: 'A fully furnished flat with living room, kitchen, bedroom, bathroom and office.',
-    category: 'apartment',
-    icon: '🏠',
-    rooms: 'Living · Kitchen · Bed · Bath · Office',
-    build: twoBed,
-  },
-  {
-    id: 'family-house',
-    name: 'Family House',
-    description: 'Detached house with a public top floor and two bedrooms plus a bathroom below.',
-    category: 'house',
-    icon: '🏡',
-    rooms: 'Living · Kitchen · 2 beds · 1 bath',
-    build: familyHouse,
-  },
-  {
-    id: 'office',
-    name: 'Office Suite',
-    description: 'Reception, a glass meeting room and an open-plan desk area with a restroom.',
-    category: 'workspace',
-    icon: '🖥️',
-    rooms: 'Reception · Meeting · Open desks',
-    build: officeSuite,
-  },
+  // Apartments
+  { id: 'studio',     name: 'Studio',                description: 'Compact open-plan living with a corner bathroom — perfect for a first sketch.', category: 'apartment', icon: '🛏️', rooms: 'Open plan · 1 bath', build: studio },
+  { id: 'loft',       name: 'Loft',                  description: 'Industrial open-plan loft with a sleeping nook and a private bathroom.',       category: 'apartment', icon: '🏙️', rooms: 'Living · Kitchen · Sleep nook · Bath', build: loft },
+  { id: 'one-bed',    name: '1-Bedroom Apartment',   description: 'Open living/kitchen with a separate bedroom and full bathroom.',              category: 'apartment', icon: '🛋️', rooms: 'Living · Kitchen · 1 bed · 1 bath', build: oneBed },
+  { id: 'two-bed',    name: '2-Bedroom Apartment',   description: 'A fully furnished flat with living room, kitchen, bedroom, bathroom and office.', category: 'apartment', icon: '🏠', rooms: 'Living · Kitchen · Bed · Bath · Office', build: twoBed },
+  // Houses
+  { id: 'tiny',       name: 'Tiny House',            description: 'A 4×5 m single-room cabin with stairs to a sleeping loft.',                   category: 'house',     icon: '🛖', rooms: 'Open plan · Stairs · Bath', build: tinyHouse },
+  { id: 'family',     name: 'Family House',          description: 'Detached house with a public top floor and two bedrooms plus a bathroom below.', category: 'house',   icon: '🏡', rooms: 'Living · Kitchen · 2 beds · 1 bath', build: familyHouse },
+  { id: 'two-storey', name: 'Two-Storey House',      description: 'Ground floor public spaces with stairs up to two bedrooms and a bathroom.',   category: 'house',     icon: '🏘️', rooms: '2 floors · 2 beds · 1.5 bath', build: twoStoreyHouse },
+  // Workspaces
+  { id: 'office',     name: 'Office Suite',          description: 'Reception, a glass meeting room and an open-plan desk area with a restroom.', category: 'workspace', icon: '🖥️', rooms: 'Reception · Meeting · Open desks', build: officeSuite },
+  { id: 'coffee',     name: 'Coffee Shop',           description: 'Customer seating, service bar, back-of-house kitchen and a restroom.',        category: 'workspace', icon: '☕', rooms: 'Counter · Seating · Kitchen · Restroom', build: coffeeShop },
 ]
+
+// ─── User templates (saved to localStorage) ───────────────────────────────────
+
+const USER_TEMPLATES_KEY = 'homedesigner_user_templates_v1'
+
+export type UserTemplate = {
+  id: string
+  name: string
+  createdAt: number
+  /** Serialized Design captured at save time. */
+  design: Design
+}
+
+export function loadUserTemplates(): UserTemplate[] {
+  try {
+    const raw = localStorage.getItem(USER_TEMPLATES_KEY)
+    if (!raw) return []
+    const arr = JSON.parse(raw)
+    return Array.isArray(arr) ? arr : []
+  } catch { return [] }
+}
+
+export function saveUserTemplate(name: string, design: Design): UserTemplate {
+  const list = loadUserTemplates()
+  const t: UserTemplate = { id: nanoid(), name, createdAt: Date.now(), design }
+  list.unshift(t)
+  localStorage.setItem(USER_TEMPLATES_KEY, JSON.stringify(list))
+  return t
+}
+
+export function deleteUserTemplate(id: string) {
+  const next = loadUserTemplates().filter(t => t.id !== id)
+  localStorage.setItem(USER_TEMPLATES_KEY, JSON.stringify(next))
+}
 
 /** Backward-compatible default template (the 2-bedroom apartment). */
 export function createTemplate(): Design {

@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useDesignStore, useTemporalStore, useActiveFloor } from '../store/design'
 import { exportJSON, importJSON } from '../persistence/storage'
 import { deriveRooms } from '../geometry/rooms'
+import { saveUserTemplate } from '../persistence/templates'
 import { useMemo } from 'react'
 
 export function Toolbar() {
@@ -21,6 +22,12 @@ export function Toolbar() {
   const handleImport = async () => {
     const d = await importJSON()
     if (d) loadDesign(d)
+  }
+  const handleSaveAsTemplate = () => {
+    const name = prompt('Save current design as a template — name:')
+    if (!name || !name.trim()) return
+    saveUserTemplate(name.trim(), design)
+    alert(`Saved "${name.trim()}" to My Templates.`)
   }
 
   useEffect(() => {
@@ -114,7 +121,8 @@ export function Toolbar() {
 
       {/* File ops */}
       <div className="flex items-center gap-1.5">
-        <button onClick={openTemplatePicker} className="px-2.5 py-1.5 text-xs bg-gray-800 text-gray-400 hover:text-cyan-300 hover:bg-gray-700 rounded-lg border border-gray-700 transition-colors">⊞ Templates</button>
+        <button onClick={openTemplatePicker} title="Browse templates" className="px-2.5 py-1.5 text-xs bg-gray-800 text-gray-400 hover:text-cyan-300 hover:bg-gray-700 rounded-lg border border-gray-700 transition-colors">⊞ Templates</button>
+        <button onClick={handleSaveAsTemplate} title="Save current design as a template" className="px-2.5 py-1.5 text-xs bg-gray-800 text-gray-400 hover:text-cyan-300 hover:bg-gray-700 rounded-lg border border-gray-700 transition-colors">⭐ Save as template</button>
         <button onClick={handleExport} className="px-2.5 py-1.5 text-xs bg-gray-800 text-gray-400 hover:text-gray-200 hover:bg-gray-700 rounded-lg border border-gray-700 transition-colors">↓ Export</button>
         <button onClick={handleImport} className="px-2.5 py-1.5 text-xs bg-gray-800 text-gray-400 hover:text-gray-200 hover:bg-gray-700 rounded-lg border border-gray-700 transition-colors">↑ Import</button>
         <button onClick={openWelcome} className="px-2.5 py-1.5 text-xs bg-gray-800 text-gray-400 hover:text-red-400 hover:bg-gray-700 rounded-lg border border-gray-700 transition-colors">New</button>
