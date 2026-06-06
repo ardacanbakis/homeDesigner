@@ -100,6 +100,23 @@ export function deriveRooms(walls: Wall[]): Room[] {
     if (!adj.get(kb)!.includes(ka)) adj.get(kb)!.push(ka)
   }
 
+  // ── Prune dangling walls ────────────────────────────────────────────────────
+  // A wall with a free end (degree-1 vertex) can't be part of any room loop;
+  // iteratively stripping such edges keeps stray/partial partitions from
+  // producing phantom faces (common while a user is mid-draw).
+  let pruned = true
+  while (pruned) {
+    pruned = false
+    for (const [k, ns] of adj) {
+      if (ns.length === 1) {
+        const other = ns[0]
+        adj.set(k, [])
+        adj.set(other, adj.get(other)!.filter(x => x !== k))
+        pruned = true
+      }
+    }
+  }
+
   // ── Trace faces ────────────────────────────────────────────────────────────
   const visited = new Set<string>() // edge-id "from->to"
   const edgeId = (a: string, b: string) => `${a}->${b}`
@@ -211,37 +228,39 @@ export function pointInPolygon(p: Vec2, verts: Vec2[]): boolean {
   return inside
 }
 
-/** Heuristic room label based on the furniture inside it. */
-const KIND_WEIGHT: Partial<Record<FurnitureKind, { label: string; weight: number }>> = {
-  bed:      { label: 'Bedroom',  weight: 6 },
-  wardrobe: { label: 'Bedroom',  weight: 3 },
-  dresser:  { label: 'Bedroom',  weight: 2 },
-  toilet:   { label: 'Bathroom', weight: 6 },
-  bathtub:  { label: 'Bathroom', weight: 6 },
-  sink:     { label: 'Kitchen',  weight: 2 }, // sink in a bathroom is overridden by toilet/tub
-  fridge:   { label: 'Kitchen',  weight: 5 },
-  stove:    { label: 'Kitchen',  weight: 5 },
-  sofa:     { label: 'Living',   weight: 5 },
-  tv:       { label: 'Living',   weight: 4 },
-  desk:     { label: 'Office',   weight: 5 },
-  table:    { label: 'Dining',   weight: 2 },
-}
-
+/** Rule-based room label from the furniture whose centre falls inside the room.
+ *  Recognises open-plan combinations (studio, living + kitchen, kitchen-diner)
+ *  rather than naively picking the single highest-weight item. */
 export function classifyRoom(room: Room, furniture: Furniture[]): string {
-  const inside = furniture.filter(f => {
-    const cx = f.position.x + f.size.w / 2
-    const cy = f.position.y + f.size.d / 2
-    return pointInPolygon({ x: cx, y: cy }, room.vertices)
-  })
+  const inside = furniture.filter(f =>
+    pointInPolygon({ x: f.position.x + f.size.w / 2, y: f.position.y + f.size.d / 2 }, room.vertices),
+  )
   if (inside.length === 0) return 'Room'
-  const scores = new Map<string, number>()
-  for (const f of inside) {
-    const e = KIND_WEIGHT[f.kind]
-    if (!e) continue
-    scores.set(e.label, (scores.get(e.label) ?? 0) + e.weight)
-  }
-  if (scores.size === 0) return 'Room'
-  return Array.from(scores.entries()).sort((a, b) => b[1] - a[1])[0][0]
+
+  const count = (k: FurnitureKind) => inside.filter(f => f.kind === k).length
+  const has = (k: FurnitureKind) => count(k) > 0
+
+  const bath = has('toilet') || has('bathtub')
+  const bed = has('bed')
+  const kitchen = has('fridge') || has('stove')
+  const living = has('sofa') || has('tv')
+  const deskCount = count('desk')
+  const table = has('table')
+  const chairs = count('chair')
+
+  if (bath && !bed && !living && deskCount === 0) return 'Bathroom'
+  if (bed && kitchen) return 'Studio'
+  if (bed) return 'Bedroom'
+  if (deskCount >= 2) return 'Office'
+  if (kitchen && living) return 'Living + Kitchen'
+  if (kitchen && table) return 'Kitchen-Diner'
+  if (kitchen) return 'Kitchen'
+  if (deskCount === 1) return 'Office'
+  if (living) return 'Living'
+  if (table && chairs >= 2) return 'Dining'
+  if (table) return 'Dining'
+  if (bath) return 'Bathroom'
+  return 'Room'
 }
 
 /** Deterministic, gentle fill color from the room id. */

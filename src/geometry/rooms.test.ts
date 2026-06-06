@@ -122,6 +122,54 @@ describe('classifyRoom', () => {
     const items = [f('bed', 500, 500, { w: 160, d: 200, h: 50 })] // far outside
     expect(classifyRoom(room, items)).toBe('Room')
   })
+
+  it('labels an open-plan room with bed + kitchen as a Studio', () => {
+    const items = [
+      f('bed', 20, 20, { w: 150, d: 200, h: 50 }),
+      f('fridge', 240, 20, { w: 60, d: 60, h: 185 }),
+      f('sofa', 40, 220, { w: 180, d: 85, h: 85 }),
+    ]
+    expect(classifyRoom(room, items)).toBe('Studio')
+  })
+
+  it('labels sofa + kitchen (no bed) as Living + Kitchen', () => {
+    const items = [
+      f('fridge', 240, 20, { w: 60, d: 60, h: 185 }),
+      f('stove', 180, 20, { w: 60, d: 60, h: 90 }),
+      f('sofa', 40, 220, { w: 180, d: 85, h: 85 }),
+    ]
+    expect(classifyRoom(room, items)).toBe('Living + Kitchen')
+  })
+
+  it('labels kitchen + table as a Kitchen-Diner', () => {
+    const items = [
+      f('fridge', 240, 20, { w: 60, d: 60, h: 185 }),
+      f('stove', 180, 20, { w: 60, d: 60, h: 90 }),
+      f('table', 120, 160, { w: 120, d: 75, h: 75 }),
+    ]
+    expect(classifyRoom(room, items)).toBe('Kitchen-Diner')
+  })
+
+  it('labels two or more desks as an Office', () => {
+    const items = [
+      f('desk', 30, 30, { w: 140, d: 64, h: 75 }),
+      f('desk', 30, 180, { w: 140, d: 64, h: 75 }),
+    ]
+    expect(classifyRoom(room, items)).toBe('Office')
+  })
+})
+
+describe('deriveRooms — robustness', () => {
+  it('ignores a dangling partition wall that does not close a loop', () => {
+    const walls = [
+      // closed rectangle
+      w(0, 0, 200, 0), w(200, 0, 200, 200), w(200, 200, 0, 200), w(0, 200, 0, 0),
+      // a stray wall sticking into the room from the top, not closing anything
+      w(100, 0, 100, 90),
+    ]
+    // Still exactly one room; the dangling wall is pruned.
+    expect(deriveRooms(walls)).toHaveLength(1)
+  })
 })
 
 describe('pointInPolygon', () => {
