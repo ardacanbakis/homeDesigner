@@ -4,6 +4,7 @@ import type Konva from 'konva'
 import { useDesignStore, useActiveFloor } from '../store/design'
 import { snapPoint, wallLength, wallAngle } from '../geometry/walls'
 import { deriveRooms, classifyRoom, roomColor } from '../geometry/rooms'
+import { snapBoxToWalls, collidingIds } from '../geometry/snap'
 import { CATALOG_MAP } from '../geometry/catalog'
 import type { Vec2 } from '../store/types'
 
@@ -40,7 +41,7 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
     addWall, moveWallEndpoint, deleteWall, deleteOpening,
     addFurniture, moveFurniture, deleteFurniture, rotateFurniture, setActiveTool,
     duplicateFurniture, nudgeFurniture, copySelection, pasteClipboard,
-    theme,
+    theme, dragKind,
   } = useDesignStore()
   const dark = theme === 'dark'
   const FLOOR_COLOR = dark ? '#12121e' : '#f8fafc'
@@ -73,6 +74,19 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
 
   // Marquee (rubber-band) selection — drag on empty space with select tool
   const [marquee, setMarquee] = useState<{ a: Vec2; b: Vec2 } | null>(null)
+
+  // Ghost footprint shown while dragging furniture in from the palette
+  const [dropGhost, setDropGhost] = useState<{ x: number; y: number; w: number; d: number } | null>(null)
+
+  // Furniture footprints that overlap another piece (drawn with a warning outline)
+  const collisions = useMemo(() => collidingIds(floor.furniture), [floor.furniture])
+
+  /** Snap a footprint (centered on a cm point) to grid then walls. */
+  const snapFootprint = useCallback((centerCm: Vec2, w: number, d: number): Vec2 => {
+    let x = centerCm.x - w / 2, y = centerCm.y - d / 2
+    if (snapEnabled) { x = Math.round(x / gridSize) * gridSize; y = Math.round(y / gridSize) * gridSize }
+    return snapBoxToWalls(x, y, w, d, floor.walls)
+  }, [snapEnabled, gridSize, floor.walls])
 
   // Derived rooms — recomputed only when walls change.
   const rooms = useMemo(() => deriveRooms(floor.walls), [floor.walls])
@@ -300,24 +314,29 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
     }
   }, [activeTool, setActiveTool])
 
-  // Drag-from-palette drop handler
+  const cursorCm = useCallback((e: React.DragEvent): Vec2 => {
+    const stageBox = stageRef.current!.container().getBoundingClientRect()
+    return stagePosToCm(e.clientX - stageBox.left, e.clientY - stageBox.top, offset, scale)
+  }, [offset, scale])
+
+  // Live ghost while dragging a palette item over the canvas
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    if (!dragKind || !stageRef.current) return
+    const size = CATALOG_MAP[dragKind].size
+    const pos = snapFootprint(cursorCm(e), size.w, size.d)
+    setDropGhost({ x: pos.x, y: pos.y, w: size.w, d: size.d })
+  }, [dragKind, cursorCm, snapFootprint])
+
+  // Drop from the palette → place the item at the snapped ghost position
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
+    setDropGhost(null)
     const kind = e.dataTransfer.getData('furniture-kind') as Parameters<typeof addFurniture>[0]
-    if (!kind) return
-    const stage = stageRef.current
-    if (!stage) return
-    const stageBox = stage.container().getBoundingClientRect()
-    const stagePos = {
-      x: e.clientX - stageBox.left,
-      y: e.clientY - stageBox.top,
-    }
-    const cm = stagePosToCm(stagePos.x, stagePos.y, offset, scale)
-    const snapped = snapEnabled
-      ? { x: Math.round(cm.x / gridSize) * gridSize, y: Math.round(cm.y / gridSize) * gridSize }
-      : cm
-    addFurniture(kind, snapped)
-  }, [addFurniture, offset, scale, snapEnabled, gridSize])
+    if (!kind || !stageRef.current) return
+    const size = CATALOG_MAP[kind].size
+    addFurniture(kind, snapFootprint(cursorCm(e), size.w, size.d))
+  }, [addFurniture, cursorCm, snapFootprint])
 
   // Adaptive grid: minor lines every MINOR_CM, major every MAJOR_CM.
   // Skips a tier when it would be denser than ~6px to stay readable + fast.
@@ -355,7 +374,8 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
     <div
       className="flex-1 relative overflow-hidden"
       style={{ cursor: activeTool === 'wall' ? 'crosshair' : isPanning ? 'grabbing' : 'default' }}
-      onDragOver={e => e.preventDefault()}
+      onDragOver={handleDragOver}
+      onDragLeave={() => setDropGhost(null)}
       onDrop={handleDrop}
     >
       <Stage
@@ -592,22 +612,16 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
                   const center = stagePosToCm(node.x(), node.y(), offset, scale)
                   let topLeft = { x: center.x - f.size.w / 2, y: center.y - f.size.d / 2 }
                   if (snapEnabled) {
-                    topLeft = {
-                      x: Math.round(topLeft.x / gridSize) * gridSize,
-                      y: Math.round(topLeft.y / gridSize) * gridSize,
-                    }
-                    const snappedCenter = cmToStagePos(
-                      { x: topLeft.x + f.size.w / 2, y: topLeft.y + f.size.d / 2 },
-                      offset,
-                      scale
-                    )
-                    node.position(snappedCenter)
+                    topLeft = { x: Math.round(topLeft.x / gridSize) * gridSize, y: Math.round(topLeft.y / gridSize) * gridSize }
                   }
-                  // Group-drag: when multiple are selected and the dragged one is part of it,
-                  // nudge the others by the same delta.
-                  const dx = topLeft.x - f.position.x
-                  const dy = topLeft.y - f.position.y
-                  if (selectedIds.length > 1 && selectedIds.includes(f.id)) {
+                  const isGroup = selectedIds.length > 1 && selectedIds.includes(f.id)
+                  // Single-item drag also snaps flush to nearby walls.
+                  if (!isGroup) topLeft = snapBoxToWalls(topLeft.x, topLeft.y, f.size.w, f.size.d, floor.walls)
+                  // Keep the Konva node in sync with the final (snapped) position.
+                  node.position(cmToStagePos({ x: topLeft.x + f.size.w / 2, y: topLeft.y + f.size.d / 2 }, offset, scale))
+
+                  if (isGroup) {
+                    const dx = topLeft.x - f.position.x, dy = topLeft.y - f.position.y
                     selectedIds.forEach(id => {
                       const other = floor.furniture.find(x => x.id === id)
                       if (!other) return
@@ -626,8 +640,9 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
                   height={pd}
                   fill={f.color ?? cat.color}
                   opacity={0.85}
-                  stroke={isPrimary ? '#60a5fa' : isInMulti ? '#3b82f6' : '#fff'}
-                  strokeWidth={isPrimary || isInMulti ? 2 : 0.5}
+                  stroke={isPrimary ? '#60a5fa' : isInMulti ? '#3b82f6' : collisions.has(f.id) ? '#f87171' : '#fff'}
+                  strokeWidth={isPrimary || isInMulti || collisions.has(f.id) ? 2 : 0.5}
+                  dash={collisions.has(f.id) && !isPrimary && !isInMulti ? [6, 4] : undefined}
                   cornerRadius={3}
                 />
                 {scale > 0.6 && (
@@ -649,8 +664,25 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
           })}
         </Layer>
 
-        {/* Marquee + measurement overlay */}
+        {/* Marquee + measurement + drop-preview overlay */}
         <Layer listening={false}>
+          {dropGhost && (() => {
+            const tl = cmToStagePos({ x: dropGhost.x, y: dropGhost.y }, offset, scale)
+            return (
+              <Rect
+                x={tl.x}
+                y={tl.y}
+                width={cmToPx(dropGhost.w, scale)}
+                height={cmToPx(dropGhost.d, scale)}
+                fill="#22d3ee"
+                opacity={0.25}
+                stroke="#22d3ee"
+                strokeWidth={1.5}
+                dash={[6, 4]}
+                cornerRadius={3}
+              />
+            )
+          })()}
           {marquee && (() => {
             const a = cmToStagePos(marquee.a, offset, scale)
             const b = cmToStagePos(marquee.b, offset, scale)

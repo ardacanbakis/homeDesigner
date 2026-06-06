@@ -24,6 +24,8 @@ type State = {
   selectedIds: string[]
   /** Clipboard of furniture copied with Ctrl+C (cross-floor paste supported). */
   clipboard: Furniture[]
+  /** Kind currently being dragged from the palette (for the canvas drop preview). */
+  dragKind: FurnitureKind | null
   snapEnabled: boolean
   gridSize: number // cm
   showWelcome: boolean
@@ -44,6 +46,7 @@ type Actions = {
   toggleSelected: (id: string) => void
   copySelection: () => void
   pasteClipboard: () => void
+  setDragKind: (k: FurnitureKind | null) => void
   alignSelected: (axis: 'left' | 'right' | 'top' | 'bottom' | 'hcenter' | 'vcenter') => void
   distributeSelected: (axis: 'horizontal' | 'vertical') => void
   toggleSnap: () => void
@@ -159,6 +162,7 @@ const useDesignStoreBase = create<State & Actions>()(
         selectedId: null as string | null,
         selectedIds: [] as string[],
         clipboard: [] as Furniture[],
+        dragKind: null as FurnitureKind | null,
         snapEnabled: true,
         gridSize: 5,
         showWelcome: isEmptyDesign(initial),
@@ -290,6 +294,7 @@ const useDesignStoreBase = create<State & Actions>()(
           })
         },
 
+        setDragKind: k => set({ dragKind: k }),
         toggleSnap: () => set(s => ({ snapEnabled: !s.snapEnabled })),
 
         undo: () => { useDesignStoreBase.temporal.getState().undo(); saveDesign(get().design) },

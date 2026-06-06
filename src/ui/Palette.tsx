@@ -15,7 +15,7 @@ const CATEGORIES: { id: FurnitureCategory; label: string; icon: string }[] = [
 const PRESET_COLORS = ['#64748b', '#8b5e3c', '#4a7c59', '#3b6ea8', '#8b3a3a', '#7b5ea7', '#a07c3a', '#3a7a7a']
 
 export function Palette() {
-  const { viewMode, addFurniture, addCustomFurniture, setActiveTool } = useDesignStore()
+  const { viewMode, addFurniture, addCustomFurniture, setActiveTool, setDragKind } = useDesignStore()
   const [activeCategory, setActiveCategory] = useState<FurnitureCategory>('bedroom')
   const [dragging, setDragging] = useState<FurnitureKind | null>(null)
   const [showCustomForm, setShowCustomForm] = useState(false)
@@ -33,6 +33,7 @@ export function Palette() {
 
   const handleDragStart = (e: React.DragEvent, entry: CatalogEntry) => {
     setDragging(entry.kind)
+    setDragKind(entry.kind)
     e.dataTransfer.setData('furniture-kind', entry.kind)
     e.dataTransfer.effectAllowed = 'copy'
   }
@@ -110,7 +111,7 @@ export function Palette() {
             key={entry.kind}
             draggable
             onDragStart={e => handleDragStart(e, entry)}
-            onDragEnd={() => setDragging(null)}
+            onDragEnd={() => { setDragging(null); setDragKind(null) }}
             onClick={() => handleClick(entry)}
             className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg cursor-pointer select-none transition-colors ${
               dragging === entry.kind
