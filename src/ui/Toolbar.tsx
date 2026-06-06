@@ -56,105 +56,101 @@ export function Toolbar() {
     return () => window.removeEventListener('keydown', handler)
   }, [undo, redo])
 
+  // Shared visual tokens ─ segmented pill group + borderless ghost buttons
+  const seg = 'flex items-center gap-0.5 p-0.5 rounded-lg bg-gray-800/80 light:bg-gray-100 border border-gray-700/50 light:border-gray-200'
+  const segBtn = (active: boolean, extra = '') =>
+    `px-3 py-1 rounded-md text-xs font-semibold transition-all ${
+      active
+        ? 'bg-cyan-500 text-white shadow-sm shadow-cyan-500/30'
+        : `text-gray-400 light:text-gray-500 hover:text-white light:hover:text-gray-900 ${extra}`
+    }`
+  const ghost = 'flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-gray-400 light:text-gray-600 hover:text-white light:hover:text-gray-900 hover:bg-gray-800 light:hover:bg-gray-100 transition-colors disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-gray-400'
+  const divider = <div className="w-px h-5 bg-gray-700/70 light:bg-gray-200 mx-1" />
+
   return (
-    <div className="flex items-center gap-2 px-3 py-2 bg-gray-900 light:bg-white border-b border-gray-700/80 light:border-gray-200 h-12 shrink-0">
-      <span className="text-white light:text-gray-900 font-semibold mr-1 text-sm tracking-wide select-none">🏠 HomeDesigner</span>
-      <div className="w-px h-5 bg-gray-700 mx-0.5" />
+    <div className="flex items-center gap-1.5 px-3 bg-gray-900 light:bg-white border-b border-gray-700/60 light:border-gray-200 h-[52px] shrink-0 shadow-sm">
+      {/* Brand */}
+      <span className="flex items-center gap-2 mr-1 select-none">
+        <span className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_1px] shadow-cyan-400/60" />
+        <span className="text-white light:text-gray-900 font-bold text-sm tracking-tight">HomeDesigner</span>
+      </span>
+      {divider}
 
       {/* 2D / 3D toggle */}
-      <div className="flex rounded-lg overflow-hidden border border-gray-700 text-xs font-semibold">
+      <div className={seg}>
         {(['2d', '3d'] as const).map(mode => (
-          <button key={mode} onClick={() => setViewMode(mode)}
-            className={`px-3 py-1.5 uppercase transition-colors ${
-              viewMode === mode ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-gray-200'
-            }`}
-          >{mode}</button>
+          <button key={mode} onClick={() => setViewMode(mode)} className={segBtn(viewMode === mode) + ' uppercase'}>{mode}</button>
         ))}
       </div>
 
       {/* 2D drawing tools */}
       {viewMode === '2d' && (
         <>
-          <div className="w-px h-5 bg-gray-700 mx-0.5" />
-          <div className="flex rounded-lg overflow-hidden border border-gray-700 text-xs font-medium">
-            <button onClick={() => setActiveTool('select')} title="Select (V)"
-              className={`px-3 py-1.5 transition-colors ${activeTool === 'select' ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-gray-200'}`}
-            >↖ Select</button>
-            <button onClick={() => setActiveTool('wall')} title="Draw Wall (W)"
-              className={`px-3 py-1.5 transition-colors ${activeTool === 'wall' ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-gray-200'}`}
-            >▭ Wall</button>
+          {divider}
+          <div className={seg}>
+            <button onClick={() => setActiveTool('select')} title="Select (V)" className={segBtn(activeTool === 'select')}>↖ Select</button>
+            <button onClick={() => setActiveTool('wall')} title="Draw Wall (W)" className={segBtn(activeTool === 'wall')}>▭ Wall</button>
           </div>
-          <button onClick={toggleSnap} title="Toggle grid snap"
-            className={`px-2.5 py-1.5 text-xs rounded-lg border transition-colors font-medium ${
+          <button onClick={toggleSnap} title="Toggle grid snap (aligns to the 5 cm grid)"
+            className={`px-2.5 py-1.5 text-xs rounded-lg transition-colors font-medium ${
               snapEnabled
-                ? 'border-green-600/60 text-green-400 bg-green-900/20'
-                : 'border-gray-700 text-gray-500 bg-gray-800 hover:text-gray-300'
+                ? 'text-emerald-400 light:text-emerald-600 bg-emerald-500/10'
+                : 'text-gray-500 hover:text-gray-300 light:hover:text-gray-700 hover:bg-gray-800 light:hover:bg-gray-100'
             }`}
           >⊞ Snap</button>
         </>
       )}
 
+      {divider}
+
       {/* Floor switcher */}
-      <div className="w-px h-5 bg-gray-700 mx-0.5" />
       <div className="flex items-center gap-1">
-        <span className="text-[10px] text-gray-500 uppercase tracking-wide">Floor</span>
+        <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Floor</span>
         <select
           value={activeFloorId}
           onChange={e => setActiveFloor(e.target.value)}
-          className="bg-gray-800 text-gray-200 text-xs px-2 py-1 rounded-lg border border-gray-700 max-w-32 focus:outline-none"
+          className="bg-gray-800 light:bg-gray-100 text-gray-200 light:text-gray-800 text-xs px-2 py-1 rounded-lg border border-gray-700/50 light:border-gray-200 max-w-32 focus:outline-none focus:ring-1 focus:ring-cyan-500"
         >
-          {design.floors.map(f => (
-            <option key={f.id} value={f.id}>{f.name}</option>
-          ))}
+          {design.floors.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
         </select>
-        <button onClick={addFloor} title="Add floor" className="px-2 py-1 text-xs bg-gray-800 text-gray-400 hover:text-gray-200 hover:bg-gray-700 rounded-lg border border-gray-700">+</button>
+        <button onClick={addFloor} title="Add floor" className={ghost + ' px-2'}>+</button>
         <button
           onClick={() => { if (design.floors.length > 1 && confirm(`Delete "${floor.name}"?`)) deleteFloor(activeFloorId) }}
           disabled={design.floors.length <= 1}
           title="Delete floor"
-          className={`px-2 py-1 text-xs rounded-lg border ${
-            design.floors.length > 1
-              ? 'bg-gray-800 text-gray-400 hover:text-red-400 hover:bg-gray-700 border-gray-700'
-              : 'bg-gray-900 text-gray-700 border-gray-800 cursor-not-allowed'
-          }`}
+          className={ghost + ' px-2 hover:!text-red-400'}
         >🗑</button>
       </div>
 
+      {divider}
+
       {/* Undo / Redo */}
-      <div className="w-px h-5 bg-gray-700 mx-0.5" />
-      <div className="flex rounded-lg overflow-hidden border border-gray-700 text-xs font-medium">
-        <button onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)"
-          className={`px-3 py-1.5 transition-colors ${canUndo ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-900 text-gray-600 cursor-not-allowed'}`}
-        >↩ Undo</button>
-        <button onClick={redo} disabled={!canRedo} title="Redo (Ctrl+Y)"
-          className={`px-3 py-1.5 transition-colors ${canRedo ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-900 text-gray-600 cursor-not-allowed'}`}
-        >↪ Redo</button>
+      <div className="flex items-center">
+        <button onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)" className={ghost}>↩</button>
+        <button onClick={redo} disabled={!canRedo} title="Redo (Ctrl+Y)" className={ghost}>↪</button>
       </div>
 
       <div className="flex-1" />
 
       {/* Autosave indicator */}
-      <div className="flex items-center gap-1 text-[10px] text-gray-500 light:text-gray-500 font-mono mr-1 select-none" title={`Auto-saved to your browser`}>
-        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+      <div className="flex items-center gap-1.5 text-[10px] text-gray-500 font-medium mr-1 select-none" title="Auto-saved to your browser">
+        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_6px] shadow-emerald-500/50" />
         {savedLabel}
+        <span className="text-gray-600 light:text-gray-400 font-mono ml-1.5 tabular-nums">
+          {floor.walls.length}w·{floor.furniture.length}f{rooms.length > 0 && `·${rooms.length}r`}
+        </span>
       </div>
+
+      {divider}
 
       {/* File ops */}
-      <div className="flex items-center gap-1.5">
-        <button onClick={openTemplatePicker} title="Browse templates" className="px-2.5 py-1.5 text-xs bg-gray-800 light:bg-gray-100 text-gray-400 light:text-gray-700 hover:text-cyan-300 hover:bg-gray-700 light:hover:text-cyan-700 light:hover:bg-gray-200 rounded-lg border border-gray-700 light:border-gray-300 transition-colors">⊞ Templates</button>
-        <button onClick={handleSaveAsTemplate} title="Save current design as a template" className="px-2.5 py-1.5 text-xs bg-gray-800 light:bg-gray-100 text-gray-400 light:text-gray-700 hover:text-cyan-300 hover:bg-gray-700 light:hover:text-cyan-700 light:hover:bg-gray-200 rounded-lg border border-gray-700 light:border-gray-300 transition-colors">⭐ Save as template</button>
-        <button onClick={handleExport} className="px-2.5 py-1.5 text-xs bg-gray-800 light:bg-gray-100 text-gray-400 light:text-gray-700 hover:text-gray-200 hover:bg-gray-700 light:hover:bg-gray-200 rounded-lg border border-gray-700 light:border-gray-300 transition-colors">↓ Export</button>
-        <button onClick={handleImport} className="px-2.5 py-1.5 text-xs bg-gray-800 light:bg-gray-100 text-gray-400 light:text-gray-700 hover:text-gray-200 hover:bg-gray-700 light:hover:bg-gray-200 rounded-lg border border-gray-700 light:border-gray-300 transition-colors">↑ Import</button>
-        <button onClick={openWelcome} className="px-2.5 py-1.5 text-xs bg-gray-800 light:bg-gray-100 text-gray-400 light:text-gray-700 hover:text-red-400 hover:bg-gray-700 light:hover:bg-gray-200 rounded-lg border border-gray-700 light:border-gray-300 transition-colors">New</button>
-        <button
-          onClick={toggleTheme}
-          title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-          className="px-2.5 py-1.5 text-xs bg-gray-800 light:bg-gray-100 text-gray-400 light:text-gray-700 hover:bg-gray-700 light:hover:bg-gray-200 rounded-lg border border-gray-700 light:border-gray-300 transition-colors"
-        >{theme === 'dark' ? '☀' : '🌙'}</button>
-      </div>
-
-      <div className="text-[10px] text-gray-600 light:text-gray-500 font-mono tabular-nums ml-1">
-        {floor.walls.length}w · {floor.furniture.length}f{rooms.length > 0 && ` · ${rooms.length}r`}
+      <div className="flex items-center gap-0.5">
+        <button onClick={openTemplatePicker} title="Browse templates" className={ghost + ' hover:!text-cyan-300'}>⊞ Templates</button>
+        <button onClick={handleSaveAsTemplate} title="Save current design as a template" className={ghost + ' hover:!text-cyan-300'}>⭐ Save</button>
+        <button onClick={handleExport} title="Export design as JSON" className={ghost}>↓ Export</button>
+        <button onClick={handleImport} title="Import a design JSON" className={ghost}>↑ Import</button>
+        <button onClick={openWelcome} title="New design" className={ghost + ' hover:!text-red-400'}>New</button>
+        <button onClick={toggleTheme} title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} className={ghost + ' px-2'}>{theme === 'dark' ? '☀' : '🌙'}</button>
       </div>
     </div>
   )

@@ -54,7 +54,8 @@ export function Palette() {
 
   return (
     <div className="w-[220px] flex flex-col bg-gray-900 light:bg-white border-r border-gray-700/80 light:border-gray-200 shrink-0 overflow-hidden">
-      <div className="px-3 py-2.5 text-[11px] font-semibold text-gray-400 uppercase tracking-widest border-b border-gray-700/80">
+      <div className="flex items-center gap-2 px-3 py-2.5 text-[11px] font-bold text-gray-300 light:text-gray-700 uppercase tracking-widest border-b border-gray-700/80 light:border-gray-200">
+        <span className="w-1 h-3 rounded-sm bg-cyan-400" />
         Furniture
       </div>
 
@@ -67,7 +68,7 @@ export function Palette() {
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Search furniture…"
-            className="w-full bg-gray-800 text-gray-200 text-xs pl-7 pr-6 py-1.5 rounded-lg border border-gray-700 focus:outline-none focus:border-blue-500 placeholder-gray-600"
+            className="w-full bg-gray-800 text-gray-200 text-xs pl-7 pr-6 py-1.5 rounded-lg border border-gray-700 focus:outline-none focus:border-cyan-500 placeholder-gray-600"
           />
           {search && (
             <button
@@ -90,7 +91,7 @@ export function Palette() {
               title={cat.label}
               className={`flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-lg text-[10px] font-medium transition-colors ${
                 activeCategory === cat.id
-                  ? 'bg-blue-600 text-white'
+                  ? 'bg-cyan-500 text-white shadow-sm shadow-cyan-500/30'
                   : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-200'
               }`}
             >
@@ -115,7 +116,7 @@ export function Palette() {
             onClick={() => handleClick(entry)}
             className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg cursor-pointer select-none transition-colors ${
               dragging === entry.kind
-                ? 'bg-blue-700 text-white'
+                ? 'bg-cyan-600 text-white'
                 : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700 active:bg-gray-600'
             }`}
           >
@@ -151,7 +152,7 @@ export function Palette() {
                 value={customLabel}
                 onChange={e => setCustomLabel(e.target.value)}
                 placeholder="Piano, Pool Table…"
-                className="w-full bg-gray-900 text-gray-200 text-xs px-2 py-1.5 rounded-lg border border-gray-600 focus:outline-none focus:border-blue-500 placeholder-gray-600"
+                className="w-full bg-gray-900 text-gray-200 text-xs px-2 py-1.5 rounded-lg border border-gray-600 focus:outline-none focus:border-cyan-500 placeholder-gray-600"
                 maxLength={32}
                 onKeyDown={e => e.key === 'Enter' && handleAddCustom()}
               />
@@ -168,7 +169,7 @@ export function Palette() {
                         type="number"
                         value={val}
                         onChange={e => setter(Math.max(1, Number(e.target.value)))}
-                        className="w-full bg-gray-900 text-gray-200 text-xs px-1 py-1 rounded border border-gray-600 text-center focus:outline-none focus:border-blue-500 font-mono"
+                        className="w-full bg-gray-900 text-gray-200 text-xs px-1 py-1 rounded border border-gray-600 text-center focus:outline-none focus:border-cyan-500 font-mono"
                         min={1} max={2000}
                       />
                     </div>
@@ -196,7 +197,7 @@ export function Palette() {
             <button
               onClick={handleAddCustom}
               disabled={!customLabel.trim()}
-              className="w-full py-1.5 text-xs font-semibold bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg transition-colors"
+              className="w-full py-1.5 text-xs font-semibold bg-cyan-500 hover:bg-cyan-400 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg transition-colors"
             >
               Add to Canvas
             </button>

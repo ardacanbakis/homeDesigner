@@ -718,10 +718,13 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
       {/* Hint overlays */}
       {floor.walls.length === 0 && floor.furniture.length === 0 && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="text-center text-gray-600">
-            <div className="text-4xl mb-3">🏠</div>
-            <div className="text-sm">Press <kbd className="bg-gray-800 px-1.5 py-0.5 rounded text-gray-400 text-xs">W</kbd> and click to draw walls</div>
-            <div className="text-xs mt-1 text-gray-700">Double-click or Esc to stop drawing</div>
+          <div className="text-center max-w-xs px-6 py-5 rounded-2xl bg-gray-900/40 light:bg-white/60 backdrop-blur-sm border border-gray-700/40 light:border-gray-200/80">
+            <div className="text-5xl mb-3 opacity-80">🏠</div>
+            <div className="text-sm font-medium text-gray-300 light:text-gray-700">Start your layout</div>
+            <div className="text-xs mt-1.5 text-gray-500">
+              Press <kbd className="bg-gray-800 light:bg-gray-100 px-1.5 py-0.5 rounded text-cyan-300 light:text-cyan-700 text-[11px] font-mono">W</kbd> and click two points to draw a wall,<br />
+              or browse <span className="text-cyan-300 light:text-cyan-700 font-medium">⊞ Templates</span> for a furnished starting point.
+            </div>
           </div>
         </div>
       )}

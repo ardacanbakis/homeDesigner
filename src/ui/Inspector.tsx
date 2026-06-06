@@ -19,12 +19,14 @@ export function Inspector() {
 
   if (!selectedId || (!wall && !opening && !furniture)) {
     return (
-      <div className="w-56 bg-gray-900 light:bg-white border-l border-gray-700 light:border-gray-200 shrink-0 flex flex-col">
-        <div className="px-3 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-700">
+      <div className="w-56 bg-gray-900 light:bg-white border-l border-gray-700/80 light:border-gray-200 shrink-0 flex flex-col">
+        <div className="flex items-center gap-2 px-3 py-2.5 text-[11px] font-bold text-gray-300 light:text-gray-700 uppercase tracking-widest border-b border-gray-700/80 light:border-gray-200">
+          <span className="w-1 h-3 rounded-sm bg-cyan-400" />
           Inspector
         </div>
-        <div className="flex-1 flex items-center justify-center text-xs text-gray-600 p-4 text-center">
-          Click to select a wall, opening, or furniture
+        <div className="flex-1 flex flex-col items-center justify-center text-xs text-gray-600 p-6 text-center gap-2">
+          <div className="text-3xl opacity-40">↖</div>
+          <div>Click a wall, opening or<br />furniture to inspect it</div>
         </div>
         <KeyHints />
       </div>
@@ -32,10 +34,11 @@ export function Inspector() {
   }
 
   return (
-    <div className="w-56 bg-gray-900 light:bg-white border-l border-gray-700 light:border-gray-200 shrink-0 flex flex-col">
-      <div className="px-3 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-700 flex justify-between items-center">
-        <span>Inspector</span>
-        <button onClick={() => setSelected(null)} className="text-gray-500 hover:text-gray-300 text-sm">✕</button>
+    <div className="w-56 bg-gray-900 light:bg-white border-l border-gray-700/80 light:border-gray-200 shrink-0 flex flex-col">
+      <div className="flex items-center gap-2 px-3 py-2.5 text-[11px] font-bold text-gray-300 light:text-gray-700 uppercase tracking-widest border-b border-gray-700/80 light:border-gray-200">
+        <span className="w-1 h-3 rounded-sm bg-cyan-400" />
+        <span className="flex-1">Inspector</span>
+        <button onClick={() => setSelected(null)} className="text-gray-500 hover:text-white light:hover:text-gray-900 text-sm leading-none">✕</button>
       </div>
 
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
@@ -160,7 +163,7 @@ export function Inspector() {
                     value={furniture.customLabel ?? ''}
                     onChange={e => updateFurnitureLabel(furniture.id, e.target.value)}
                     maxLength={32}
-                    className="w-full bg-gray-800 text-gray-200 text-xs px-2 py-1 rounded border border-gray-600 focus:outline-none focus:border-blue-500"
+                    className="w-full bg-gray-800 text-gray-200 text-xs px-2 py-1 rounded border border-gray-600 focus:outline-none focus:border-cyan-500"
                   />
                 </div>
               )}

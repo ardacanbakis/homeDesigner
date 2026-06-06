@@ -27,7 +27,7 @@ export default function App() {
     document.documentElement.dataset.theme = theme
   }, [theme])
 
-  const TOOLBAR_H = 48
+  const TOOLBAR_H = 52
   const PALETTE_W = 220
   const INSPECTOR_W = 236
   const workspaceW = width - PALETTE_W - INSPECTOR_W
