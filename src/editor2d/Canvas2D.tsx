@@ -1,16 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Stage, Layer, Line, Rect, Circle, Text, Group, Arrow } from 'react-konva'
+import { Stage, Layer, Line, Rect, Circle, Text, Group, Arrow, Transformer } from 'react-konva'
 import type Konva from 'konva'
 import { useDesignStore, useActiveFloor } from '../store/design'
 import { snapPoint, wallLength, wallAngle } from '../geometry/walls'
 import { deriveRooms, classifyRoom, roomColor } from '../geometry/rooms'
 import { snapBoxToWalls, collidingIds } from '../geometry/snap'
+import { formatLength, formatArea, gridTiersFor, rotatedExtents, footprintAABB } from '../geometry/measure'
 import { CATALOG_MAP } from '../geometry/catalog'
 import type { Vec2 } from '../store/types'
 
 const PX_PER_CM = 1   // at scale=1, 1 cm = 1 px
-const MINOR_CM = 5    // minor grid spacing (cm) — matches snap step
-const MAJOR_CM = 50   // major grid spacing (cm)
 
 function pxToCm(px: number, scale: number): number {
   return px / (PX_PER_CM * scale)
@@ -40,9 +39,10 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
     setSelected, setSelectedIds, toggleSelected,
     addWall, moveWallEndpoint, deleteWall, deleteOpening,
     addFurniture, moveFurniture, deleteFurniture, rotateFurniture, setActiveTool,
-    duplicateFurniture, nudgeFurniture, copySelection, pasteClipboard,
-    theme, dragKind,
+    duplicateFurniture, nudgeFurniture, copySelection, pasteClipboard, transformFurniture,
+    theme, dragKind, units,
   } = useDesignStore()
+  const { minor: MINOR_CM, major: MAJOR_CM } = gridTiersFor(units)
   const dark = theme === 'dark'
   const FLOOR_COLOR = dark ? '#12121e' : '#f8fafc'
   const MINOR_COLOR = dark ? '#21212e' : '#e2e8f0'
@@ -81,6 +81,22 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
   // Furniture footprints that overlap another piece (drawn with a warning outline)
   const collisions = useMemo(() => collidingIds(floor.furniture), [floor.furniture])
 
+  // Konva nodes per furniture id, so the Transformer can attach to the selection.
+  const furnitureNodes = useRef(new Map<string, Konva.Group>())
+  const transformerRef = useRef<Konva.Transformer>(null)
+
+  // Show rotate/resize handles only for a single selected piece of furniture.
+  const transformTargetId =
+    activeTool === 'select' && !measureMode && selectedIds.length <= 1 && selectedId
+      && floor.furniture.some(f => f.id === selectedId) ? selectedId : null
+  useEffect(() => {
+    const tr = transformerRef.current
+    if (!tr) return
+    const node = transformTargetId ? furnitureNodes.current.get(transformTargetId) : undefined
+    tr.nodes(node ? [node] : [])
+    tr.getLayer()?.batchDraw()
+  }, [transformTargetId, floor.furniture])
+
   /** Snap a footprint (centered on a cm point) to grid then walls. */
   const snapFootprint = useCallback((centerCm: Vec2, w: number, d: number): Vec2 => {
     let x = centerCm.x - w / 2, y = centerCm.y - d / 2
@@ -99,8 +115,9 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
       minY = Math.min(minY, wl.a.y, wl.b.y); maxY = Math.max(maxY, wl.a.y, wl.b.y)
     }
     for (const fr of floor.furniture) {
-      minX = Math.min(minX, fr.position.x); maxX = Math.max(maxX, fr.position.x + fr.size.w)
-      minY = Math.min(minY, fr.position.y); maxY = Math.max(maxY, fr.position.y + fr.size.d)
+      const b = footprintAABB(fr)
+      minX = Math.min(minX, b.x0); maxX = Math.max(maxX, b.x1)
+      minY = Math.min(minY, b.y0); maxY = Math.max(maxY, b.y1)
     }
     if (!isFinite(minX)) return
     const pad = 60
@@ -289,11 +306,9 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
         const minY = Math.min(marquee.a.y, marquee.b.y)
         const maxY = Math.max(marquee.a.y, marquee.b.y)
         const hits = floor.furniture.filter(f => {
-          // Treat furniture as enclosed if its footprint is fully inside the marquee.
-          return f.position.x >= minX
-            && f.position.y >= minY
-            && f.position.x + f.size.w <= maxX
-            && f.position.y + f.size.d <= maxY
+          // Treat furniture as enclosed if its (rotated) footprint is fully inside the marquee.
+          const b = footprintAABB(f)
+          return b.x0 >= minX && b.y0 >= minY && b.x1 <= maxX && b.y1 <= maxY
         }).map(f => f.id)
         if (e.evt.shiftKey) {
           // Merge with current selection.
@@ -406,7 +421,6 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
               pts.push(sp.x, sp.y)
             }
             const c = cmToStagePos(room.centroid, offset, scale)
-            const areaM2 = (room.area / 10000).toFixed(1)
             return (
               <Group key={room.id}>
                 <Line points={pts} closed fill={fill} opacity={0.10} />
@@ -415,7 +429,7 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
                     x={c.x - 60}
                     y={c.y - 14}
                     width={120}
-                    text={`${label}\n${areaM2} m²`}
+                    text={`${label}\n${formatArea(room.area, units)}`}
                     align="center"
                     fontSize={12}
                     fontStyle="bold"
@@ -496,7 +510,7 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
                   <Text
                     x={midX}
                     y={midY - 12}
-                    text={`${Math.round(len)} cm`}
+                    text={formatLength(len, units)}
                     fontSize={10}
                     fill={isSelected ? '#93c5fd' : LEN_LABEL_COLOR}
                     align="center"
@@ -597,6 +611,7 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
             return (
               <Group
                 key={f.id}
+                ref={node => { if (node) furnitureNodes.current.set(f.id, node); else furnitureNodes.current.delete(f.id) }}
                 x={cx.x}
                 y={cx.y}
                 rotation={(f.rotation * 180) / Math.PI}
@@ -608,17 +623,22 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
                 onDragMove={e => {
                   e.cancelBubble = true
                   const node = e.target
-                  // node x/y is the group center in stage px
+                  // node x/y is the group center in stage px. Snap the rotated
+                  // footprint's bounding box, then convert back to the stored
+                  // (unrotated) top-left.
                   const center = stagePosToCm(node.x(), node.y(), offset, scale)
-                  let topLeft = { x: center.x - f.size.w / 2, y: center.y - f.size.d / 2 }
+                  const { ew, ed } = rotatedExtents(f.size.w, f.size.d, f.rotation)
+                  let box = { x: center.x - ew / 2, y: center.y - ed / 2 }
                   if (snapEnabled) {
-                    topLeft = { x: Math.round(topLeft.x / gridSize) * gridSize, y: Math.round(topLeft.y / gridSize) * gridSize }
+                    box = { x: Math.round(box.x / gridSize) * gridSize, y: Math.round(box.y / gridSize) * gridSize }
                   }
                   const isGroup = selectedIds.length > 1 && selectedIds.includes(f.id)
                   // Single-item drag also snaps flush to nearby walls.
-                  if (!isGroup) topLeft = snapBoxToWalls(topLeft.x, topLeft.y, f.size.w, f.size.d, floor.walls)
+                  if (!isGroup) box = snapBoxToWalls(box.x, box.y, ew, ed, floor.walls)
+                  const snappedCenter = { x: box.x + ew / 2, y: box.y + ed / 2 }
+                  const topLeft = { x: snappedCenter.x - f.size.w / 2, y: snappedCenter.y - f.size.d / 2 }
                   // Keep the Konva node in sync with the final (snapped) position.
-                  node.position(cmToStagePos({ x: topLeft.x + f.size.w / 2, y: topLeft.y + f.size.d / 2 }, offset, scale))
+                  node.position(cmToStagePos(snappedCenter, offset, scale))
 
                   if (isGroup) {
                     const dx = topLeft.x - f.position.x, dy = topLeft.y - f.position.y
@@ -631,6 +651,21 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
                   } else {
                     moveFurniture(f.id, topLeft)
                   }
+                }}
+                onTransformEnd={e => {
+                  // Bake the Transformer's scale into the stored size and reset
+                  // it, so labels/strokes never render stretched.
+                  const node = e.target
+                  const round = (v: number) => (snapEnabled ? Math.max(gridSize, Math.round(v / gridSize) * gridSize) : Math.max(1, Math.round(v)))
+                  const w = round(f.size.w * node.scaleX())
+                  const d = round(f.size.d * node.scaleY())
+                  node.scale({ x: 1, y: 1 })
+                  const center = stagePosToCm(node.x(), node.y(), offset, scale)
+                  transformFurniture(f.id, {
+                    size: { ...f.size, w, d },
+                    rotation: (node.rotation() * Math.PI) / 180,
+                    position: { x: center.x - w / 2, y: center.y - d / 2 },
+                  })
                 }}
               >
                 <Rect
@@ -651,7 +686,7 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
                     y={-pd / 2}
                     width={pw}
                     height={pd}
-                    text={`${cat.icon}\n${cat.label}`}
+                    text={`${cat.icon}\n${f.kind === 'custom' ? (f.customLabel || cat.label) : cat.label}`}
                     fontSize={Math.max(9, Math.min(14, pw / 6))}
                     fill="#fff"
                     align="center"
@@ -662,6 +697,25 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
               </Group>
             )
           })}
+
+          {/* Rotate + resize handles for the single selected item */}
+          <Transformer
+            ref={transformerRef}
+            rotateEnabled
+            rotationSnaps={[0, 45, 90, 135, 180, 225, 270, 315]}
+            rotationSnapTolerance={6}
+            keepRatio={false}
+            flipEnabled={false}
+            ignoreStroke
+            anchorSize={8}
+            anchorCornerRadius={2}
+            anchorStroke="#22d3ee"
+            anchorFill={dark ? '#0b1220' : '#ffffff'}
+            borderStroke="#22d3ee"
+            borderDash={[4, 3]}
+            rotateAnchorOffset={22}
+            boundBoxFunc={(oldBox, newBox) => (Math.abs(newBox.width) < 8 || Math.abs(newBox.height) < 8 ? oldBox : newBox)}
+          />
         </Layer>
 
         {/* Marquee + measurement + drop-preview overlay */}
@@ -743,7 +797,7 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
               className="absolute pointer-events-none -translate-x-1/2 -translate-y-1/2 bg-blue-600 text-white font-bold rounded-lg px-3 py-1 shadow-lg tabular-nums"
               style={{ left: mid.x, top: mid.y - 28, fontSize: 22 }}
             >
-              {Math.round(lenCm)} cm
+              {formatLength(lenCm, units)}
             </div>
             <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-gray-900/80 text-blue-300 text-xs px-3 py-1.5 rounded-full border border-gray-700 pointer-events-none">
               Click to add point · Double-click or Esc to finish
@@ -765,7 +819,7 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
               className="absolute pointer-events-none -translate-x-1/2 -translate-y-1/2 bg-orange-500 text-white font-bold rounded-lg px-3 py-1 shadow-lg tabular-nums"
               style={{ left: mid.x, top: mid.y - 28, fontSize: 18 }}
             >
-              {distCm < 100 ? `${Math.round(distCm)} cm` : `${(distCm / 100).toFixed(2)} m`}
+              {formatLength(distCm, units)}
             </div>
             <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-gray-900/80 text-orange-300 text-xs px-3 py-1.5 rounded-full border border-gray-700 pointer-events-none">
               📏 Measuring · Click two points · Esc or M to exit

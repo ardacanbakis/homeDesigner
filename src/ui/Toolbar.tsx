@@ -10,7 +10,7 @@ export function Toolbar() {
     snapEnabled, toggleSnap, undo, redo,
     activeFloorId, setActiveFloor, addFloor, deleteFloor,
     openWelcome, openTemplatePicker,
-    theme, toggleTheme, lastSavedAt,
+    theme, toggleTheme, lastSavedAt, units, setUnits,
   } = useDesignStore()
   const floor = useActiveFloor()
   const { pastStates, futureStates } = useTemporalStore()
@@ -139,6 +139,13 @@ export function Toolbar() {
         <span className="text-gray-600 light:text-gray-400 font-mono ml-1.5 tabular-nums">
           {floor.walls.length}w·{floor.furniture.length}f{rooms.length > 0 && `·${rooms.length}r`}
         </span>
+      </div>
+
+      {/* Units */}
+      <div className={seg} title="Display units — type any unit into a field (2.5m, 8' 2&quot;, 96in)">
+        {([['cm', 'cm'], ['m', 'm'], ['ftin', 'ft']] as const).map(([u, label]) => (
+          <button key={u} onClick={() => setUnits(u)} className={segBtn(units === u, '!px-2')}>{label}</button>
+        ))}
       </div>
 
       {divider}

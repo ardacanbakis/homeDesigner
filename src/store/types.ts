@@ -65,3 +65,6 @@ export type ViewMode = '2d' | '3d'
 export type ActiveTool = 'select' | 'wall'
 
 export type CameraMode = 'orbit' | 'walk' | 'top' | 'front' | 'iso'
+
+/** Display units. Geometry is always stored in cm; this only affects UI. */
+export type Units = 'cm' | 'm' | 'ftin'

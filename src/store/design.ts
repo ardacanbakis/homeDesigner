@@ -5,7 +5,8 @@ import { nanoid } from 'nanoid'
 import { CATALOG_MAP } from '../geometry/catalog'
 import { saveDesign, loadDesign, CURRENT_VERSION } from '../persistence/storage'
 import { wallLength } from '../geometry/walls'
-import type { Wall, Opening, Furniture, FurnitureKind, Vec2, Design, Floor, ViewMode, ActiveTool, CameraMode } from './types'
+import { snapStepFor } from '../geometry/measure'
+import type { Wall, Opening, Furniture, FurnitureKind, Vec2, Design, Floor, ViewMode, ActiveTool, CameraMode, Units } from './types'
 
 type State = {
   design: Design
@@ -27,7 +28,10 @@ type State = {
   /** Kind currently being dragged from the palette (for the canvas drop preview). */
   dragKind: FurnitureKind | null
   snapEnabled: boolean
-  gridSize: number // cm
+  /** Snap step in cm — follows the unit system (5 cm metric, 1 inch imperial). */
+  gridSize: number
+  /** Display units; geometry is always stored in cm. */
+  units: Units
   showWelcome: boolean
   showTemplatePicker: boolean
 }
@@ -39,6 +43,7 @@ type Actions = {
   toggleFloorIsolation: () => void
   setTheme: (t: 'dark' | 'light') => void
   toggleTheme: () => void
+  setUnits: (u: Units) => void
   setSelected: (id: string | null) => void
   /** Replace the multi-selection. The first id (if any) also becomes selectedId. */
   setSelectedIds: (ids: string[]) => void
@@ -79,6 +84,8 @@ type Actions = {
   updateFurnitureSize: (id: string, size: Partial<{ w: number; d: number; h: number }>) => void
   updateFurnitureLabel: (id: string, label: string) => void
   updateFurnitureColor: (id: string, color: string) => void
+  /** Apply a move/resize/rotate in one commit, so it is a single undo step. */
+  transformFurniture: (id: string, patch: Partial<Pick<Furniture, 'position' | 'size' | 'rotation'>>) => void
 
   loadDesign: (design: Design) => void
   newDesign: () => void
@@ -128,6 +135,15 @@ function initialTheme(): 'dark' | 'light' {
   return 'dark'
 }
 
+const UNITS_KEY = 'hd-units'
+function initialUnits(): Units {
+  try {
+    const saved = localStorage.getItem(UNITS_KEY)
+    if (saved === 'cm' || saved === 'm' || saved === 'ftin') return saved
+  } catch { /* ignore */ }
+  return 'cm'
+}
+
 /** Cumulative elevation (cm) of each floor by index: floor 0 at 0, floor n above the sum of heights below. */
 export function floorElevations(floors: Floor[]): number[] {
   const out: number[] = []
@@ -164,7 +180,8 @@ const useDesignStoreBase = create<State & Actions>()(
         clipboard: [] as Furniture[],
         dragKind: null as FurnitureKind | null,
         snapEnabled: true,
-        gridSize: 5,
+        gridSize: snapStepFor(initialUnits()),
+        units: initialUnits(),
         showWelcome: isEmptyDesign(initial),
         showTemplatePicker: false,
 
@@ -177,6 +194,10 @@ const useDesignStoreBase = create<State & Actions>()(
           const next = get().theme === 'dark' ? 'light' : 'dark'
           try { localStorage.setItem(THEME_KEY, next) } catch { /* ignore */ }
           set({ theme: next })
+        },
+        setUnits: u => {
+          try { localStorage.setItem(UNITS_KEY, u) } catch { /* ignore */ }
+          set({ units: u, gridSize: snapStepFor(u) })
         },
         setSelected: id => set({ selectedId: id, selectedIds: id ? [id] : [] }),
         setSelectedIds: ids => set({ selectedIds: ids, selectedId: ids[0] ?? null }),
@@ -437,6 +458,10 @@ const useDesignStoreBase = create<State & Actions>()(
           set(s => ({ design: commit(mapActive(s, f => ({ ...f, furniture: f.furniture.map(x => x.id === id ? { ...x, color } : x) }))) }))
         },
 
+        transformFurniture: (id, patch) => {
+          set(s => ({ design: commit(mapActive(s, f => ({ ...f, furniture: f.furniture.map(x => x.id === id ? { ...x, ...patch } : x) }))) }))
+        },
+
         // ── Persistence ────────────────────────────────────────────────────
         loadDesign: design => {
           saveDesign(design)
@@ -457,7 +482,15 @@ const useDesignStoreBase = create<State & Actions>()(
         closeTemplatePicker: () => set({ showTemplatePicker: false }),
       }
     },
-    { partialize: (s: State & Actions) => ({ design: s.design }) }
+    {
+      partialize: (s: State & Actions) => ({ design: s.design }),
+      // Only record history when the design actually changed. Without this,
+      // UI-only updates (e.g. the lastSavedAt subscriber below, which fires
+      // inside the edit's own set) pushed extra snapshots out of order, so
+      // consecutive undos jumped forward.
+      equality: (past, current) => past.design === current.design,
+      limit: 200,
+    },
   )
 )
 

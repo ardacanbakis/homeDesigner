@@ -191,4 +191,54 @@ describe('design store — meta', () => {
     store.getState().toggleTheme()
     expect(store.getState().theme).toBe(before)
   })
+
+  it('setUnits switches the snap step with the unit system', () => {
+    store.getState().setUnits('ftin')
+    expect(store.getState().units).toBe('ftin')
+    expect(store.getState().gridSize).toBeCloseTo(2.54)
+    store.getState().setUnits('m')
+    expect(store.getState().gridSize).toBe(5)
+    store.getState().setUnits('cm')
+  })
+})
+
+describe('design store — undo', () => {
+  it('a single undo reverts a single edit', () => {
+    store.getState().addWall({ x: 0, y: 0 }, { x: 100, y: 0 })
+    store.getState().addWall({ x: 100, y: 0 }, { x: 100, y: 100 })
+    expect(store.getState().design.floors[0].walls).toHaveLength(2)
+    store.getState().undo()
+    expect(store.getState().design.floors[0].walls).toHaveLength(1)
+  })
+
+  it('consecutive undos walk steadily backwards (never forward)', () => {
+    store.getState().addWall({ x: 0, y: 0 }, { x: 100, y: 0 })
+    store.getState().addWall({ x: 100, y: 0 }, { x: 100, y: 100 })
+    store.getState().addWall({ x: 100, y: 100 }, { x: 0, y: 100 })
+    const counts: number[] = []
+    for (let i = 0; i < 3; i++) {
+      store.getState().undo()
+      counts.push(store.getState().design.floors[0].walls.length)
+    }
+    expect(counts).toEqual([2, 1, 0])
+  })
+})
+
+describe('design store — transformFurniture', () => {
+  it('applies position, size and rotation as a single undo step', () => {
+    store.getState().addFurniture('sofa', { x: 0, y: 0 })
+    const id = store.getState().design.floors[0].furniture[0].id
+    const temporal = useDesignStore.temporal.getState()
+    const before = temporal.pastStates.length
+    store.getState().transformFurniture(id, {
+      position: { x: 40, y: 50 },
+      size: { w: 220, d: 95, h: 85 },
+      rotation: Math.PI / 4,
+    })
+    const item = store.getState().design.floors[0].furniture[0]
+    expect(item.position).toEqual({ x: 40, y: 50 })
+    expect(item.size.w).toBe(220)
+    expect(item.rotation).toBeCloseTo(Math.PI / 4)
+    expect(useDesignStore.temporal.getState().pastStates.length).toBe(before + 1)
+  })
 })

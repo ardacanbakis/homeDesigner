@@ -1,15 +1,20 @@
 import { useDesignStore, useActiveFloor } from '../store/design'
 import { CATALOG_MAP } from '../geometry/catalog'
 import { wallLength } from '../geometry/walls'
+import { formatLength } from '../geometry/measure'
+import { LengthField } from './LengthField'
 
 const FURNITURE_COLORS = ['#8B7355', '#6B5B45', '#778899', '#2F2F2F', '#B0C4DE', '#4a7c59', '#3b6ea8', '#8b3a3a', '#f5f5f5']
+
+/** Normalize radians to a whole-degree angle in [0, 360). */
+const toDeg = (rad: number) => ((Math.round((rad * 180) / Math.PI) % 360) + 360) % 360
 
 export function Inspector() {
   const {
     selectedId, setSelected,
     deleteWall, setWallLength, updateWall, addOpening, updateOpening, deleteOpening,
     deleteFurniture, rotateFurniture, updateFurnitureSize, updateFurnitureLabel,
-    updateFurnitureColor, duplicateFurniture,
+    updateFurnitureColor, duplicateFurniture, transformFurniture, units,
   } = useDesignStore()
   const floor = useActiveFloor()
 
@@ -47,16 +52,16 @@ export function Inspector() {
         {wall && (
           <>
             <Section label="Wall">
-              <NumberField
-                label="Length (cm)" value={Math.round(wallLength(wall))} min={1} max={5000}
+              <LengthRow
+                label="Length" value={Math.round(wallLength(wall))} min={1} max={5000}
                 onChange={v => setWallLength(wall.id, v)}
               />
-              <NumberField
-                label="Height (cm)" value={wall.height} min={50} max={600}
+              <LengthRow
+                label="Height" value={wall.height} min={50} max={600}
                 onChange={v => updateWall(wall.id, { height: v })}
               />
-              <NumberField
-                label="Thickness (cm)" value={wall.thickness} min={2} max={100}
+              <LengthRow
+                label="Thickness" value={wall.thickness} min={2} max={100}
                 onChange={v => updateWall(wall.id, { thickness: v })}
               />
             </Section>
@@ -109,21 +114,21 @@ export function Inspector() {
               </Section>
 
               <Section label="Position & Size">
-                <NumberField
-                  label="Offset (cm)" value={opening.offset} min={0} max={maxOffset}
+                <LengthRow
+                  label="Offset" value={opening.offset} min={0} max={maxOffset}
                   onChange={v => updateOpening(opening.id, { offset: v })}
                 />
-                <NumberField
-                  label="Width (cm)" value={opening.width} min={20} max={500}
+                <LengthRow
+                  label="Width" value={opening.width} min={20} max={500}
                   onChange={v => updateOpening(opening.id, { width: v })}
                 />
-                <NumberField
-                  label="Height (cm)" value={opening.height} min={20} max={300}
+                <LengthRow
+                  label="Height" value={opening.height} min={20} max={300}
                   onChange={v => updateOpening(opening.id, { height: v })}
                 />
                 {opening.type === 'window' && (
-                  <NumberField
-                    label="Sill (cm)" value={opening.sillHeight} min={0} max={200}
+                  <LengthRow
+                    label="Sill" value={opening.sillHeight} min={0} max={200}
                     onChange={v => updateOpening(opening.id, { sillHeight: v })}
                   />
                 )}
@@ -167,22 +172,46 @@ export function Inspector() {
                   />
                 </div>
               )}
-              <Row label="X" value={`${Math.round(furniture.position.x)} cm`} />
-              <Row label="Y" value={`${Math.round(furniture.position.y)} cm`} />
-              <Row label="Rotation" value={`${Math.round((furniture.rotation * 180) / Math.PI)}°`} />
+              <Row label="X" value={formatLength(furniture.position.x, units)} />
+              <Row label="Y" value={formatLength(furniture.position.y, units)} />
+              <div className="flex justify-between items-center text-xs py-0.5">
+                <span className="text-gray-500">Rotation</span>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => rotateFurniture(furniture.id, -Math.PI / 12)}
+                    title="Rotate −15°"
+                    className="px-1 text-gray-400 hover:text-cyan-300"
+                  >⟲</button>
+                  <input
+                    type="number"
+                    value={toDeg(furniture.rotation)}
+                    onChange={e => {
+                      const deg = Number(e.target.value)
+                      if (Number.isFinite(deg)) transformFurniture(furniture.id, { rotation: (deg * Math.PI) / 180 })
+                    }}
+                    step={15}
+                    className="w-12 bg-gray-800 text-gray-200 text-xs px-1 py-0.5 rounded border border-gray-600 text-right font-mono focus:outline-none focus:border-cyan-500"
+                  />
+                  <span className="text-gray-500">°</span>
+                  <button
+                    onClick={() => rotateFurniture(furniture.id, Math.PI / 12)}
+                    title="Rotate +15°"
+                    className="px-1 text-gray-400 hover:text-cyan-300"
+                  >⟳</button>
+                </div>
+              </div>
             </Section>
 
-            <Section label="Size (cm)">
+            <Section label="Size">
               <div className="grid grid-cols-3 gap-1">
                 {(['w', 'd', 'h'] as const).map(dim => (
                   <div key={dim}>
                     <div className="text-[10px] text-gray-500 text-center mb-0.5">{dim.toUpperCase()}</div>
-                    <input
-                      type="number"
+                    <LengthField
                       value={furniture.size[dim]}
-                      onChange={e => updateFurnitureSize(furniture.id, { [dim]: Number(e.target.value) })}
-                      className="w-full bg-gray-800 text-gray-200 text-xs px-1 py-1 rounded border border-gray-600 text-center"
-                      min={1} max={999}
+                      onChange={v => updateFurnitureSize(furniture.id, { [dim]: v })}
+                      max={2000}
+                      className="w-full text-center px-0.5"
                     />
                   </div>
                 ))}
@@ -258,20 +287,13 @@ function Row({ label, value }: { label: string; value: string }) {
   )
 }
 
-function NumberField({ label, value, min, max, onChange }: {
+function LengthRow({ label, value, min, max, onChange }: {
   label: string; value: number; min: number; max: number; onChange: (v: number) => void
 }) {
   return (
     <div className="flex justify-between items-center text-xs py-0.5">
       <span className="text-gray-500">{label}</span>
-      <input
-        type="number"
-        value={value}
-        min={min}
-        max={max}
-        onChange={e => onChange(Number(e.target.value))}
-        className="w-20 bg-gray-800 text-gray-200 text-xs px-1.5 py-0.5 rounded border border-gray-600 text-right font-mono"
-      />
+      <LengthField value={value} min={min} max={max} onChange={onChange} className="w-24 text-right" />
     </div>
   )
 }
@@ -280,7 +302,8 @@ function KeyHints() {
   return (
     <div className="px-3 py-2 text-[10px] text-gray-600 border-t border-gray-700 space-y-0.5">
       <div>V — select · W — wall · M — measure</div>
-      <div>R — rotate · F — fit · Shift-click — multi</div>
+      <div>R — rotate 90° · drag ↻ handle to free-rotate</div>
+      <div>F — fit · Shift-click — multi-select</div>
       <div>Ctrl+C/V/D — copy/paste/dup</div>
       <div>Arrows — nudge · Del — delete</div>
     </div>

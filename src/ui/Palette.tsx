@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { CATALOG, type CatalogEntry, type FurnitureCategory } from '../geometry/catalog'
 import { useDesignStore } from '../store/design'
 import type { FurnitureKind } from '../store/types'
+import { formatLength } from '../geometry/measure'
+import { LengthField } from './LengthField'
 
 const CATEGORIES: { id: FurnitureCategory; label: string; icon: string }[] = [
   { id: 'bedroom',   label: 'Bedroom',   icon: '🛏️' },
@@ -15,7 +17,7 @@ const CATEGORIES: { id: FurnitureCategory; label: string; icon: string }[] = [
 const PRESET_COLORS = ['#64748b', '#8b5e3c', '#4a7c59', '#3b6ea8', '#8b3a3a', '#7b5ea7', '#a07c3a', '#3a7a7a']
 
 export function Palette() {
-  const { viewMode, addFurniture, addCustomFurniture, setActiveTool, setDragKind } = useDesignStore()
+  const { viewMode, addFurniture, addCustomFurniture, setActiveTool, setDragKind, units } = useDesignStore()
   const [activeCategory, setActiveCategory] = useState<FurnitureCategory>('bedroom')
   const [dragging, setDragging] = useState<FurnitureKind | null>(null)
   const [showCustomForm, setShowCustomForm] = useState(false)
@@ -123,8 +125,8 @@ export function Palette() {
             <span className="text-xl leading-none shrink-0">{entry.icon}</span>
             <div className="flex-1 min-w-0">
               <div className="text-xs font-medium truncate">{entry.label}</div>
-              <div className="text-[10px] text-gray-500 font-mono">
-                {entry.size.w}×{entry.size.d}×{entry.size.h}cm
+              <div className="text-[10px] text-gray-500 font-mono truncate">
+                {[entry.size.w, entry.size.d, entry.size.h].map(v => formatLength(v, units)).join(' × ')}
               </div>
             </div>
             <div className="w-3 h-3 rounded-sm shrink-0 border border-gray-600/80" style={{ background: entry.color }} />
@@ -159,19 +161,13 @@ export function Palette() {
             </div>
 
             <div>
-              <label className="text-[10px] text-gray-500 uppercase tracking-wide block mb-1">Dimensions (cm)</label>
+              <label className="text-[10px] text-gray-500 uppercase tracking-wide block mb-1">Dimensions</label>
               <div className="grid grid-cols-3 gap-1">
                 {([['W', customW, setCustomW], ['D', customD, setCustomD], ['H', customH, setCustomH]] as [string, number, (v: number) => void][]).map(
                   ([lbl, val, setter]) => (
                     <div key={lbl}>
                       <div className="text-[9px] text-gray-500 text-center mb-0.5">{lbl}</div>
-                      <input
-                        type="number"
-                        value={val}
-                        onChange={e => setter(Math.max(1, Number(e.target.value)))}
-                        className="w-full bg-gray-900 text-gray-200 text-xs px-1 py-1 rounded border border-gray-600 text-center focus:outline-none focus:border-cyan-500 font-mono"
-                        min={1} max={2000}
-                      />
+                      <LengthField value={val} onChange={setter} max={2000} className="w-full text-center px-0.5 py-1 !bg-gray-900" />
                     </div>
                   )
                 )}

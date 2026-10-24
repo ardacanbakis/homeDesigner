@@ -3,7 +3,9 @@ import {
   TEMPLATES, TEMPLATE_CATEGORIES,
   loadUserTemplates, deleteUserTemplate, type UserTemplate,
 } from '../persistence/templates'
-import type { Design } from '../store/types'
+import type { Design, Units } from '../store/types'
+import { useDesignStore } from '../store/design'
+import { formatLength, formatArea } from '../geometry/measure'
 
 /** Min/max bounds (cm) of a design's first-floor walls. */
 function bounds(design: Design) {
@@ -19,13 +21,13 @@ function bounds(design: Design) {
   return { minX, minY, maxX, maxY }
 }
 
-/** "5.0 × 3.6 m · 18 m²" footprint summary from the wall bounding box. */
-function footprintLabel(design: Design): string {
+/** Footprint summary from the wall bounding box: "5.4 × 4.0 m · 22 m²" or `17' 9" × 13' 1" · 232 ft²`. */
+function footprintLabel(design: Design, units: Units): string {
   const b = bounds(design)
   if (!b) return ''
-  const wM = (b.maxX - b.minX) / 100
-  const dM = (b.maxY - b.minY) / 100
-  return `${wM.toFixed(1)} × ${dM.toFixed(1)} m · ${Math.round(wM * dM)} m²`
+  const w = b.maxX - b.minX, d = b.maxY - b.minY
+  if (units === 'ftin') return `${formatLength(w, units)} × ${formatLength(d, units)} · ${formatArea(w * d, units)}`
+  return `${(w / 100).toFixed(1)} × ${(d / 100).toFixed(1)} m · ${Math.round((w * d) / 10000)} m²`
 }
 
 /** Scaled SVG mini floor-plan: faint furniture footprints + wall lines. */
@@ -82,6 +84,7 @@ function TemplateCard({ tpl, design, dark, accent, onPick, onDelete }: {
   /** When present, renders a small delete button on the card (user templates only). */
   onDelete?: () => void
 }) {
+  const units = useDesignStore(s => s.units)
   const cardBg = dark
     ? 'bg-gray-900/70 border-gray-700/60 hover:border-gray-500'
     : 'bg-white/85 border-gray-200 hover:border-gray-400 shadow-sm'
@@ -104,7 +107,7 @@ function TemplateCard({ tpl, design, dark, accent, onPick, onDelete }: {
           <p className={`text-[11px] mt-1 leading-snug ${dark ? 'text-gray-400' : 'text-gray-600'}`}>{tpl.description}</p>
           <div className={`mt-2 flex items-center justify-between text-[10px] font-mono ${dark ? 'text-gray-500' : 'text-gray-400'}`}>
             <span className="truncate">{tpl.rooms}</span>
-            <span className="shrink-0 ml-2" style={{ color: accent }}>{footprintLabel(design)}</span>
+            <span className="shrink-0 ml-2" style={{ color: accent }}>{footprintLabel(design, units)}</span>
           </div>
         </div>
       </button>
