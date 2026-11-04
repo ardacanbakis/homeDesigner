@@ -151,6 +151,18 @@ function initialTheme(): 'dark' | 'light' {
   return 'dark'
 }
 
+/** Set before a reload that should land back in 3D (see App's chunk retry). */
+export const REOPEN_3D_KEY = 'hd-reopen-3d'
+function initialViewMode(): ViewMode {
+  try {
+    if (sessionStorage.getItem(REOPEN_3D_KEY)) {
+      sessionStorage.removeItem(REOPEN_3D_KEY)
+      return '3d'
+    }
+  } catch { /* ignore */ }
+  return '2d'
+}
+
 const UNITS_KEY = 'hd-units'
 function initialUnits(): Units {
   try {
@@ -185,7 +197,7 @@ const useDesignStoreBase = create<State & Actions>()(
       return {
         design: initial,
         activeFloorId: initial.floors[0].id,
-        viewMode: '2d' as ViewMode,
+        viewMode: initialViewMode(),
         activeTool: 'select' as ActiveTool,
         cameraMode: 'orbit' as CameraMode,
         isolateActiveFloor: false,

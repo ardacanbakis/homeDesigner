@@ -6,16 +6,11 @@ export default defineConfig({
   base: '/homeDesigner/',
   plugins: [react(), tailwindcss()],
   build: {
+    // The 3D view is a dynamic import (see App.tsx), so three.js and
+    // react-three-fiber land in their own lazily-loaded chunk; shared deps
+    // (react, zustand) stay in the entry. Hand-written manualChunks used to
+    // drag those shared deps into the 3D chunk and force it to load upfront.
     chunkSizeWarningLimit: 1600,
-    rollupOptions: {
-      output: {
-        manualChunks: (id: string) => {
-          if (id.includes('node_modules/three/')) return 'three'
-          if (id.includes('@react-three/')) return 'r3f'
-          if (id.includes('node_modules/konva') || id.includes('node_modules/react-konva')) return 'konva'
-        },
-      },
-    },
   },
   test: {
     environment: 'jsdom',
