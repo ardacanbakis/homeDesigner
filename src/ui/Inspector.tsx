@@ -1,7 +1,10 @@
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useDesignStore, useActiveFloor } from '../store/design'
-import { CATALOG_MAP } from '../geometry/catalog'
+import { CATALOG_MAP, FLOOR_MATERIALS } from '../geometry/catalog'
 import { wallLength } from '../geometry/walls'
-import { formatLength, footprintAABB } from '../geometry/measure'
+import { formatLength, formatArea, footprintAABB } from '../geometry/measure'
+import { deriveRooms, roomAt, tagForRoom, classifyRoom, roomColor, pointInPolygon } from '../geometry/rooms'
+import type { FloorMaterial, Vec2 } from '../store/types'
 import { LengthField } from './LengthField'
 
 const FURNITURE_COLORS = ['#8B7355', '#6B5B45', '#778899', '#2F2F2F', '#B0C4DE', '#4a7c59', '#3b6ea8', '#8b3a3a', '#f5f5f5']
@@ -15,12 +18,29 @@ export function Inspector() {
     deleteWall, setWallLength, updateWall, addOpening, updateOpening, deleteOpening,
     deleteFurniture, rotateFurniture, updateFurnitureSize, updateFurnitureLabel,
     updateFurnitureColor, duplicateFurniture, transformFurniture, units,
+    selectedRoomAt, selectRoom,
   } = useDesignStore()
   const floor = useActiveFloor()
 
   const wall = floor.walls.find(w => w.id === selectedId)
   const opening = floor.openings.find(o => o.id === selectedId)
   const furniture = floor.furniture.find(f => f.id === selectedId)
+
+  if (!selectedId && selectedRoomAt) {
+    return (
+      <div className="w-56 bg-gray-900 light:bg-white border-l border-gray-700/80 light:border-gray-200 shrink-0 flex flex-col">
+        <div className="flex items-center gap-2 px-3 py-2.5 text-[11px] font-bold text-gray-300 light:text-gray-700 uppercase tracking-widest border-b border-gray-700/80 light:border-gray-200">
+          <span className="w-1 h-3 rounded-sm bg-cyan-400" />
+          <span className="flex-1">Inspector</span>
+          <button onClick={() => selectRoom(null)} aria-label="Close inspector" className="text-gray-500 hover:text-white light:hover:text-gray-900 text-sm leading-none">✕</button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-3 space-y-3">
+          <RoomPanel at={selectedRoomAt} />
+        </div>
+        <KeyHints />
+      </div>
+    )
+  }
 
   if (!selectedId || (!wall && !opening && !furniture)) {
     return (
@@ -31,7 +51,7 @@ export function Inspector() {
         </div>
         <div className="flex-1 flex flex-col items-center justify-center text-xs text-gray-600 p-6 text-center gap-2">
           <div className="text-3xl opacity-40">↖</div>
-          <div>Click a wall, opening or<br />furniture to inspect it</div>
+          <div>Click a wall, opening, piece<br />of furniture or a room</div>
         </div>
         <KeyHints />
       </div>
@@ -89,7 +109,7 @@ export function Inspector() {
                 >
                   <span>{op.type === 'door' ? '🚪' : '🪟'}</span>
                   <span className="capitalize">{op.type}</span>
-                  <span className="text-gray-500 ml-auto">{op.width}cm</span>
+                  <span className="text-gray-500 ml-auto">{formatLength(op.width, units)}</span>
                 </div>
               ))}
             </Section>
@@ -268,6 +288,117 @@ export function Inspector() {
         )}
       </div>
     </div>
+  )
+}
+
+/** Name, size and floor finish of the room containing `at`. */
+function RoomPanel({ at }: { at: Vec2 }) {
+  const floor = useActiveFloor()
+  const { setRoomTag, units } = useDesignStore()
+  const rooms = useMemo(() => deriveRooms(floor.walls), [floor.walls])
+  const room = roomAt(rooms, at)
+  if (!room) {
+    return <div className="text-xs text-gray-500 text-center py-6">This room no longer exists.</div>
+  }
+  const tag = tagForRoom(room, rooms, floor.roomTags)
+  const auto = classifyRoom(room, floor.furniture)
+  const perimeter = room.vertices.reduce((sum, v, i) => {
+    const n = room.vertices[(i + 1) % room.vertices.length]
+    return sum + Math.hypot(n.x - v.x, n.y - v.y)
+  }, 0)
+  const pieces = floor.furniture.filter(f =>
+    pointInPolygon({ x: f.position.x + f.size.w / 2, y: f.position.y + f.size.d / 2 }, room.vertices)).length
+  const current = tag?.material ?? null
+  const swatches: { id: FloorMaterial | null; label: string; color: string }[] = [
+    { id: null, label: 'Auto', color: roomColor(room.id) },
+    ...(Object.entries(FLOOR_MATERIALS) as [FloorMaterial, (typeof FLOOR_MATERIALS)[FloorMaterial]][])
+      .map(([id, m]) => ({ id, label: m.label, color: m.color })),
+  ]
+
+  return (
+    <>
+      <Section label="Room">
+        <div className="text-[10px] text-gray-500 mb-1">Name</div>
+        <RoomNameField key={room.id} value={tag?.name ?? ''} placeholder={auto} onCommit={name => setRoomTag(at, { name })} />
+        <div className="pt-1.5" />
+        <Row label="Area" value={formatArea(room.area, units)} />
+        <Row label="Perimeter" value={formatLength(perimeter, units)} />
+        <Row label="Furniture" value={String(pieces)} />
+      </Section>
+
+      <Section label="Floor finish">
+        <div className="grid grid-cols-3 gap-1">
+          {swatches.map(sw => (
+            <button
+              key={sw.label}
+              onClick={() => setRoomTag(at, { material: sw.id })}
+              aria-pressed={current === sw.id}
+              className={`flex flex-col items-center gap-1 py-1.5 rounded-lg border text-[10px] transition-colors ${
+                current === sw.id
+                  ? 'border-cyan-400 bg-cyan-500/10 text-cyan-200 light:text-cyan-700'
+                  : 'border-gray-700 bg-gray-800/60 text-gray-400 hover:border-gray-500 hover:text-gray-200'
+              }`}
+            >
+              <span
+                className="w-6 h-4 rounded-sm border border-black/20"
+                style={{ background: sw.color, opacity: sw.id ? 1 : 0.55 }}
+              />
+              {sw.label}
+            </button>
+          ))}
+        </div>
+      </Section>
+
+      {tag && (
+        <button
+          onClick={() => setRoomTag(at, { name: '', material: null })}
+          className="w-full px-2 py-1.5 text-xs bg-gray-800 text-gray-300 hover:bg-gray-700 rounded border border-gray-600"
+        >
+          Reset to automatic
+        </button>
+      )}
+      <div className="text-[10px] text-gray-600 leading-relaxed">
+        Tip: double-click any room on the plan to rename it.
+      </div>
+    </>
+  )
+}
+
+/** Text field that commits on Enter/blur (one undo step), Esc reverts. Focuses
+ *  itself when the plan asks to rename a room (double-click). */
+function RoomNameField({ value, placeholder, onCommit }: { value: string; placeholder: string; onCommit: (v: string) => void }) {
+  const [draft, setDraft] = useState<string | null>(null) // null = not editing
+  const cancelled = useRef(false)
+  const ref = useRef<HTMLInputElement>(null)
+  const pending = useDesignStore(s => s.renameRoomPending)
+  const clearPending = useDesignStore(s => s.clearRenameRoom)
+  // The request may arrive before this field mounts, so it lives in the store.
+  useEffect(() => {
+    if (!pending) return
+    ref.current?.focus()
+    ref.current?.select()
+    clearPending()
+  }, [pending, clearPending])
+  return (
+    <input
+      ref={ref}
+      type="text"
+      value={draft ?? value}
+      placeholder={placeholder}
+      maxLength={40}
+      onFocus={() => setDraft(value)}
+      onChange={e => setDraft(e.target.value)}
+      onBlur={() => {
+        if (draft !== null && !cancelled.current && draft.trim() !== value) onCommit(draft)
+        cancelled.current = false
+        setDraft(null)
+      }}
+      onKeyDown={e => {
+        if (e.key === 'Enter') e.currentTarget.blur()
+        if (e.key === 'Escape') { cancelled.current = true; e.currentTarget.blur() }
+      }}
+      className="w-full bg-gray-800 text-gray-100 text-sm font-semibold px-2 py-1.5 rounded-lg border border-gray-600 focus:outline-none focus:border-cyan-500 placeholder:text-gray-500 placeholder:font-normal"
+    />
   )
 }
 

@@ -279,7 +279,7 @@ function SceneContent({ onShotReady }: { onShotReady: (fn: () => void) => void }
         if (isolate && !interactive) return null
         return (
           <group key={floor.id}>
-            {interactive && <Rooms3D walls={floor.walls} elevation={elevations[i]} />}
+            <Rooms3D walls={floor.walls} tags={floor.roomTags} elevation={elevations[i]} showTints={interactive} />
             <Walls3D walls={floor.walls} openings={floor.openings} elevation={elevations[i]} interactive={interactive} />
             <Furniture3D furniture={floor.furniture} elevation={elevations[i]} interactive={interactive} />
           </group>

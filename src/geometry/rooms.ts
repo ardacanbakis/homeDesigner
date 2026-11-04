@@ -1,6 +1,7 @@
-import type { Vec2, Wall, Opening, Furniture, FurnitureKind } from '../store/types'
+import type { Vec2, Wall, Opening, Furniture, FurnitureKind, RoomTag } from '../store/types'
 import { footprintAABB } from './measure'
 import { wallLength } from './walls'
+import { isFlat, FLOOR_MATERIALS } from './catalog'
 
 /** Axis-aligned box in cm. */
 export type Box = { x0: number; y0: number; x1: number; y1: number }
@@ -245,9 +246,9 @@ export function classifyRoom(room: Room, furniture: Furniture[]): string {
   const count = (k: FurnitureKind) => inside.filter(f => f.kind === k).length
   const has = (k: FurnitureKind) => count(k) > 0
 
-  const bath = has('toilet') || has('bathtub')
+  const bath = has('toilet') || has('bathtub') || has('shower')
   const bed = has('bed')
-  const kitchen = has('fridge') || has('stove')
+  const kitchen = has('fridge') || has('stove') || has('counter')
   const living = has('sofa') || has('tv')
   const deskCount = count('desk')
   const table = has('table')
@@ -277,7 +278,8 @@ export function roomLabelPoint(room: Room, furniture: Furniture[], w: number, h:
   const xs = room.vertices.map(v => v.x), ys = room.vertices.map(v => v.y)
   const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys)
   const step = Math.max(6, Math.min(x1 - x0, y1 - y0) / 14)
-  const boxes = [...furniture.map(footprintAABB), ...obstacles]
+  // Rugs are part of the floor; a label may sit on one.
+  const boxes = [...furniture.filter(f => !isFlat(f.kind)).map(footprintAABB), ...obstacles]
   const inRoom = (x: number, y: number) => pointInPolygon({ x, y }, room.vertices)
   const { centroid: c } = room
   let best = c, bestScore = Infinity
@@ -360,4 +362,53 @@ export function roomHue(id: string): number {
 export function roomColor(id: string): string {
   // Fixed saturation/lightness for a calm pastel palette.
   return `hsl(${roomHue(id)} 55% 50%)`
+}
+
+/** The polygon moved inward by `d` cm on every edge (exact for rectilinear
+ *  rooms; fine for gentle angles). Used to draw outlines inside the walls. */
+export function insetPolygon(verts: Vec2[], d: number): Vec2[] {
+  const n = verts.length
+  if (n < 3) return verts
+  let area2 = 0
+  for (let i = 0; i < n; i++) {
+    const a = verts[i], b = verts[(i + 1) % n]
+    area2 += a.x * b.y - b.x * a.y
+  }
+  const s = area2 > 0 ? 1 : -1 // inward = left of each edge for CCW (in y-down: area2 > 0)
+  const normal = (a: Vec2, b: Vec2) => {
+    const len = Math.hypot(b.x - a.x, b.y - a.y) || 1
+    return { x: (-(b.y - a.y) / len) * s, y: ((b.x - a.x) / len) * s }
+  }
+  return verts.map((v, i) => {
+    const n1 = normal(verts[(i + n - 1) % n], v)
+    const n2 = normal(v, verts[(i + 1) % n])
+    const k = 1 + n1.x * n2.x + n1.y * n2.y
+    if (k < 1e-3) return v // hairpin — leave it
+    return { x: v.x + ((n1.x + n2.x) * d) / k, y: v.y + ((n1.y + n2.y) * d) / k }
+  })
+}
+
+/** The innermost room containing a point, if any. */
+export function roomAt(rooms: Room[], p: Vec2): Room | undefined {
+  let best: Room | undefined
+  for (const r of rooms) if (pointInPolygon(p, r.vertices) && (!best || r.area < best.area)) best = r
+  return best
+}
+
+/** The user's tag for a room: the first tag anchored inside it (and not inside
+ *  a smaller room nested within it). */
+export function tagForRoom(room: Room, rooms: Room[], tags: RoomTag[] | undefined): RoomTag | undefined {
+  return tags?.find(t => roomAt(rooms, t.at)?.id === room.id)
+}
+
+/** Name to show for a room: the user's name if set, else a guess from its furniture. */
+export function roomName(room: Room, furniture: Furniture[], tag: RoomTag | undefined): string {
+  return tag?.name || classifyRoom(room, furniture)
+}
+
+/** Fill for a room: its floor material when one is set, else the id-derived tint. */
+export function roomFill(room: Room, tag: RoomTag | undefined): { color: string; material: boolean } {
+  return tag?.material
+    ? { color: FLOOR_MATERIALS[tag.material].color, material: true }
+    : { color: roomColor(room.id), material: false }
 }

@@ -27,17 +27,20 @@ class GltfBuilder {
     this.materials = [];
   }
 
-  addMaterial({ color = [0.7, 0.5, 0.3], roughness = 0.8, metalness = 0.0, name = 'mat' } = {}) {
+  addMaterial({ color = [0.7, 0.5, 0.3], roughness = 0.8, metalness = 0.0, name = 'mat', opacity = 1, emissive = null } = {}) {
     const idx = this.materials.length;
-    this.materials.push({
+    const mat = {
       name,
       pbrMetallicRoughness: {
-        baseColorFactor: [...color, 1.0],
+        baseColorFactor: [...color, opacity],
         metallicFactor: metalness,
         roughnessFactor: roughness,
       },
-      doubleSided: false,
-    });
+      doubleSided: opacity < 1,
+    };
+    if (opacity < 1) mat.alphaMode = 'BLEND';
+    if (emissive) mat.emissiveFactor = emissive;
+    this.materials.push(mat);
     return idx;
   }
 
@@ -447,6 +450,125 @@ function buildStairs(b) {
   b.addMesh(new THREE.BoxGeometry(0.04, 0.04, 1.05), matRailing, [0.47, 0.08, 0], null, 'handrail');
 }
 
+function buildNightstand(b) {
+  const matWood = b.addMaterial({ color: hex('#9A7454'), roughness: 0.6, name: 'wood' });
+  const matTop = b.addMaterial({ color: hex('#B38B66'), roughness: 0.5, name: 'top' });
+  const matKnob = b.addMaterial({ color: hex('#C9A96E'), roughness: 0.25, metalness: 0.8, name: 'knob' });
+
+  // Carcass on short legs, top slightly overhanging
+  b.addMesh(new THREE.BoxGeometry(0.94, 0.72, 0.92), matWood, [0, 0.0, 0], null, 'body');
+  b.addMesh(new THREE.BoxGeometry(1, 0.06, 1), matTop, [0, 0.39, 0], null, 'top');
+  for (const [xi, zi] of [[-0.42, -0.4], [0.42, -0.4], [-0.42, 0.4], [0.42, 0.4]]) {
+    b.addMesh(new THREE.BoxGeometry(0.07, 0.14, 0.07), matWood, [xi, -0.43, zi], null, 'leg');
+  }
+  // Two drawer fronts with knobs (front = +z)
+  for (const y of [0.15, -0.18]) {
+    b.addMesh(new THREE.BoxGeometry(0.86, 0.28, 0.03), matTop, [0, y, 0.47], null, 'drawer');
+    b.addMesh(new THREE.SphereGeometry(0.035, 8, 6), matKnob, [0, y, 0.5], null, 'knob');
+  }
+}
+
+function buildBookshelf(b) {
+  const matWood = b.addMaterial({ color: hex('#7A5C42'), roughness: 0.65, name: 'wood' });
+  const matBack = b.addMaterial({ color: hex('#5E4532'), roughness: 0.8, name: 'back' });
+  const bookColors = ['#8C2F39', '#2F5D8C', '#C9A227', '#3E7C59', '#6B4E8C', '#D9D4C7', '#B5562E'];
+  const matBooks = bookColors.map((c, i) => b.addMaterial({ color: hex(c), roughness: 0.8, name: `book_${i}` }));
+
+  // Open front (+z): back panel at -z, two sides, five shelves
+  b.addMesh(new THREE.BoxGeometry(1, 1, 0.06), matBack, [0, 0, -0.47], null, 'back');
+  b.addMesh(new THREE.BoxGeometry(0.05, 1, 1), matWood, [-0.475, 0, 0], null, 'side_L');
+  b.addMesh(new THREE.BoxGeometry(0.05, 1, 1), matWood, [0.475, 0, 0], null, 'side_R');
+  const shelves = 5;
+  for (let i = 0; i <= shelves; i++) {
+    const y = -0.48 + (i * 0.96) / shelves;
+    b.addMesh(new THREE.BoxGeometry(0.9, 0.035, 0.94), matWood, [0, y, 0], null, `shelf_${i}`);
+  }
+  // Rows of books on the lower four shelves (deterministic pseudo-random widths)
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
+  for (let s = 0; s < 4; s++) {
+    const base = -0.48 + (s * 0.96) / shelves + 0.0175;
+    let x = -0.43;
+    let n = 0;
+    while (x < 0.36) {
+      const bw = 0.04 + rnd() * 0.05;
+      const bh = 0.11 + rnd() * 0.06;
+      b.addMesh(new THREE.BoxGeometry(bw, bh, 0.7), matBooks[(s * 3 + n) % matBooks.length], [x + bw / 2, base + bh / 2, 0.05], null, 'book');
+      x += bw + 0.008;
+      n++;
+      if (rnd() < 0.12) x += 0.08; // occasional gap
+    }
+  }
+}
+
+function buildLamp(b) {
+  const matMetal = b.addMaterial({ color: hex('#2B2B2B'), roughness: 0.3, metalness: 0.8, name: 'metal' });
+  const matShade = b.addMaterial({ color: hex('#F2E6CC'), roughness: 0.9, emissive: [0.55, 0.45, 0.28], name: 'shade' });
+
+  b.addMesh(new THREE.CylinderGeometry(0.45, 0.5, 0.03, 24), matMetal, [0, -0.485, 0], null, 'base');
+  b.addMesh(new THREE.CylinderGeometry(0.035, 0.035, 0.72, 10), matMetal, [0, -0.11, 0], null, 'pole');
+  b.addMesh(new THREE.CylinderGeometry(0.32, 0.5, 0.26, 24), matShade, [0, 0.37, 0], null, 'shade');
+}
+
+function buildPlant(b) {
+  const matPot = b.addMaterial({ color: hex('#C2703D'), roughness: 0.85, name: 'pot' });
+  const matSoil = b.addMaterial({ color: hex('#3B2A1E'), roughness: 1, name: 'soil' });
+  const matLeaf = b.addMaterial({ color: hex('#3F7A3A'), roughness: 0.8, name: 'leaf' });
+  const matLeaf2 = b.addMaterial({ color: hex('#5B9A4A'), roughness: 0.8, name: 'leaf_light' });
+  const matStem = b.addMaterial({ color: hex('#4E3B2A'), roughness: 0.9, name: 'stem' });
+
+  // Pot (lower third), soil, stem and a cluster of leafy blobs
+  b.addMesh(new THREE.CylinderGeometry(0.34, 0.26, 0.32, 18), matPot, [0, -0.34, 0], null, 'pot');
+  b.addMesh(new THREE.CylinderGeometry(0.31, 0.31, 0.02, 18), matSoil, [0, -0.18, 0], null, 'soil');
+  b.addMesh(new THREE.CylinderGeometry(0.025, 0.035, 0.36, 8), matStem, [0, -0.02, 0], null, 'stem');
+  const blobs = [
+    [0, 0.26, 0, 0.27, matLeaf], [-0.22, 0.12, 0.08, 0.2, matLeaf2], [0.22, 0.14, -0.06, 0.21, matLeaf],
+    [0.06, 0.1, 0.24, 0.18, matLeaf2], [-0.06, 0.16, -0.24, 0.19, matLeaf2], [0.04, 0.4, 0.02, 0.16, matLeaf2],
+  ];
+  for (const [x, y, z, r, mat] of blobs) {
+    b.addMesh(new THREE.IcosahedronGeometry(r, 1), mat, [x, y, z], null, 'foliage');
+  }
+}
+
+function buildCounter(b) {
+  const matCab = b.addMaterial({ color: hex('#E9E4DA'), roughness: 0.55, name: 'cabinet' });
+  const matTop = b.addMaterial({ color: hex('#6E6A66'), roughness: 0.25, metalness: 0.05, name: 'worktop' });
+  const matKick = b.addMaterial({ color: hex('#2E2E2E'), roughness: 0.7, name: 'plinth' });
+  const matHandle = b.addMaterial({ color: hex('#9A9A9A'), roughness: 0.2, metalness: 0.85, name: 'handle' });
+
+  // Recessed plinth, cabinet body, worktop overhanging the front (+z)
+  b.addMesh(new THREE.BoxGeometry(0.98, 0.1, 0.86), matKick, [0, -0.45, -0.05], null, 'plinth');
+  b.addMesh(new THREE.BoxGeometry(1, 0.84, 0.94), matCab, [0, -0.0, -0.03], null, 'body');
+  b.addMesh(new THREE.BoxGeometry(1, 0.06, 1), matTop, [0, 0.47, 0], null, 'worktop');
+  // Two doors with a gap and bar handles
+  for (const x of [-0.245, 0.245]) {
+    b.addMesh(new THREE.BoxGeometry(0.48, 0.78, 0.02), matCab, [x, -0.01, 0.45], null, 'door');
+    b.addMesh(new THREE.BoxGeometry(0.16, 0.02, 0.03), matHandle, [x, 0.3, 0.47], null, 'handle');
+  }
+}
+
+function buildShower(b) {
+  const matTray = b.addMaterial({ color: hex('#F4F4F2'), roughness: 0.15, name: 'tray' });
+  const matGlass = b.addMaterial({ color: hex('#BFDCEB'), roughness: 0.05, metalness: 0.1, opacity: 0.28, name: 'glass' });
+  const matChrome = b.addMaterial({ color: hex('#D0D0D0'), roughness: 0.08, metalness: 0.95, name: 'chrome' });
+  const matTile = b.addMaterial({ color: hex('#DDE6EA'), roughness: 0.3, name: 'tile' });
+
+  // Low tray, tiled back wall (-z), glass on the front (+z) and right (+x)
+  b.addMesh(new THREE.BoxGeometry(1, 0.04, 1), matTray, [0, -0.48, 0], null, 'tray');
+  b.addMesh(new THREE.BoxGeometry(1, 0.94, 0.02), matTile, [0, 0.01, -0.49], null, 'back_wall');
+  b.addMesh(new THREE.BoxGeometry(0.98, 0.9, 0.01), matGlass, [0, -0.01, 0.49], null, 'glass_front');
+  b.addMesh(new THREE.BoxGeometry(0.01, 0.9, 0.98), matGlass, [0.49, -0.01, 0], null, 'glass_side');
+  // Chrome frame along the glass edges
+  b.addMesh(new THREE.BoxGeometry(0.02, 0.92, 0.02), matChrome, [0.49, -0.0, 0.49], null, 'post');
+  b.addMesh(new THREE.BoxGeometry(1, 0.015, 0.015), matChrome, [0, 0.45, 0.49], null, 'rail_front');
+  b.addMesh(new THREE.BoxGeometry(0.015, 0.015, 1), matChrome, [0.49, 0.45, 0], null, 'rail_side');
+  // Riser pipe and rain head on the back wall
+  b.addMesh(new THREE.CylinderGeometry(0.015, 0.015, 0.5, 8), matChrome, [-0.2, 0.15, -0.46], null, 'riser');
+  b.addMesh(new THREE.CylinderGeometry(0.12, 0.12, 0.015, 20), matChrome, [-0.2, 0.42, -0.34], null, 'head');
+  b.addMesh(new THREE.BoxGeometry(0.015, 0.015, 0.12), matChrome, [-0.2, 0.42, -0.42], null, 'arm');
+  b.addMesh(new THREE.CylinderGeometry(0.03, 0.03, 0.04, 10), matChrome, [-0.2, -0.05, -0.47], null, 'valve');
+}
+
 // ─── Generate all models ────────────────────────────────────────────────────
 
 const MODELS = {
@@ -465,6 +587,12 @@ const MODELS = {
   tv: buildTV,
   desk: buildDesk,
   stairs: buildStairs,
+  nightstand: buildNightstand,
+  bookshelf: buildBookshelf,
+  lamp: buildLamp,
+  plant: buildPlant,
+  counter: buildCounter,
+  shower: buildShower,
 };
 
 let totalSize = 0;

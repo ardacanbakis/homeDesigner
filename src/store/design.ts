@@ -6,7 +6,8 @@ import { CATALOG_MAP } from '../geometry/catalog'
 import { saveDesign, loadDesign, CURRENT_VERSION } from '../persistence/storage'
 import { wallLength } from '../geometry/walls'
 import { snapStepFor } from '../geometry/measure'
-import type { Wall, Opening, Furniture, FurnitureKind, Vec2, Design, Floor, ViewMode, ActiveTool, CameraMode, Units } from './types'
+import { deriveRooms, roomAt } from '../geometry/rooms'
+import type { Wall, Opening, Furniture, FurnitureKind, Vec2, Design, Floor, ViewMode, ActiveTool, CameraMode, Units, RoomTag, FloorMaterial } from './types'
 
 type State = {
   design: Design
@@ -23,6 +24,11 @@ type State = {
   /** Additional selected furniture IDs (selectedId is the primary).
    *  Multi-selection only applies to furniture on the active floor. */
   selectedIds: string[]
+  /** A point inside the selected room (rooms are derived, so they're picked by
+   *  location rather than id). Cleared whenever anything else is selected. */
+  selectedRoomAt: Vec2 | null
+  /** Set when the room's name field should take focus (double-click to rename). */
+  renameRoomPending: boolean
   /** Clipboard of furniture copied with Ctrl+C (cross-floor paste supported). */
   clipboard: Furniture[]
   /** Kind currently being dragged from the palette (for the canvas drop preview). */
@@ -53,6 +59,11 @@ type Actions = {
   setSelectedIds: (ids: string[]) => void
   /** Add or remove an id from the multi-selection (shift-click). */
   toggleSelected: (id: string) => void
+  selectRoom: (at: Vec2 | null, opts?: { rename?: boolean }) => void
+  clearRenameRoom: () => void
+  /** Rename / re-floor the room containing `at`. An empty name or a null
+   *  material resets that property to automatic. */
+  setRoomTag: (at: Vec2, patch: { name?: string; material?: FloorMaterial | null }) => void
   copySelection: () => void
   pasteClipboard: () => void
   setDragKind: (k: FurnitureKind | null) => void
@@ -182,6 +193,8 @@ const useDesignStoreBase = create<State & Actions>()(
         lastSavedAt: Date.now(),
         selectedId: null as string | null,
         selectedIds: [] as string[],
+        selectedRoomAt: null as Vec2 | null,
+        renameRoomPending: false,
         clipboard: [] as Furniture[],
         dragKind: null as FurnitureKind | null,
         snapEnabled: true,
@@ -206,14 +219,40 @@ const useDesignStoreBase = create<State & Actions>()(
           try { localStorage.setItem(UNITS_KEY, u) } catch { /* ignore */ }
           set({ units: u, gridSize: snapStepFor(u) })
         },
-        setSelected: id => set({ selectedId: id, selectedIds: id ? [id] : [] }),
-        setSelectedIds: ids => set({ selectedIds: ids, selectedId: ids[0] ?? null }),
+        setSelected: id => set({ selectedId: id, selectedIds: id ? [id] : [], selectedRoomAt: null }),
+        setSelectedIds: ids => set({ selectedIds: ids, selectedId: ids[0] ?? null, selectedRoomAt: null }),
+        selectRoom: (at, opts) => set({ selectedRoomAt: at, selectedId: null, selectedIds: [], renameRoomPending: !!(at && opts?.rename) }),
+        clearRenameRoom: () => set({ renameRoomPending: false }),
+        setRoomTag: (at, patch) => {
+          set(s => {
+            const floor = s.design.floors.find(f => f.id === s.activeFloorId)
+            if (!floor) return {}
+            const rooms = deriveRooms(floor.walls)
+            const room = roomAt(rooms, at)
+            if (!room) return {}
+            const tags = floor.roomTags ?? []
+            // Wall edits can merge rooms, leaving several tags in one; the first wins
+            // and the rest are folded away on the next edit.
+            const mine = tags.filter(t => roomAt(rooms, t.at)?.id === room.id)
+            const base = mine[0]
+            let name = base?.name
+            let material = base?.material
+            if (patch.name !== undefined) name = patch.name.trim().slice(0, 40) || undefined
+            if (patch.material !== undefined) material = patch.material ?? undefined
+            const others = tags.filter(t => !mine.includes(t))
+            const tag: RoomTag = { id: base?.id ?? nanoid(), at: base?.at ?? { x: at.x, y: at.y } }
+            if (name) tag.name = name
+            if (material) tag.material = material
+            const roomTags = name || material ? [...others, tag] : others
+            return { design: commit(mapActive(s, f => ({ ...f, roomTags }))) }
+          })
+        },
         toggleSelected: id => {
           set(s => {
             const next = s.selectedIds.includes(id)
               ? s.selectedIds.filter(x => x !== id)
               : [...s.selectedIds, id]
-            return { selectedIds: next, selectedId: next[0] ?? null }
+            return { selectedIds: next, selectedId: next[0] ?? null, selectedRoomAt: null }
           })
         },
 
@@ -347,7 +386,7 @@ const useDesignStoreBase = create<State & Actions>()(
           })
         },
 
-        setActiveFloor: id => set({ activeFloorId: id, selectedId: null }),
+        setActiveFloor: id => set({ activeFloorId: id, selectedId: null, selectedIds: [], selectedRoomAt: null }),
 
         renameFloor: (id, name) => {
           set(s => ({ design: commit({ ...s.design, floors: s.design.floors.map(f => f.id === id ? { ...f, name } : f) }) }))
@@ -472,13 +511,13 @@ const useDesignStoreBase = create<State & Actions>()(
         // ── Persistence ────────────────────────────────────────────────────
         loadDesign: design => {
           saveDesign(design)
-          set(s => ({ design, activeFloorId: design.floors[0].id, selectedId: null, selectedIds: [], showWelcome: false, showTemplatePicker: false, viewEpoch: s.viewEpoch + 1 }))
+          set(s => ({ design, activeFloorId: design.floors[0].id, selectedId: null, selectedIds: [], selectedRoomAt: null, showWelcome: false, showTemplatePicker: false, viewEpoch: s.viewEpoch + 1 }))
         },
 
         newDesign: () => {
           const design = emptyDesign()
           saveDesign(design)
-          set(s => ({ design, activeFloorId: design.floors[0].id, selectedId: null, selectedIds: [], viewEpoch: s.viewEpoch + 1 }))
+          set(s => ({ design, activeFloorId: design.floors[0].id, selectedId: null, selectedIds: [], selectedRoomAt: null, viewEpoch: s.viewEpoch + 1 }))
         },
 
         save: () => saveDesign(get().design),
@@ -512,6 +551,8 @@ useDesignStoreBase.subscribe((s, prev) => {
   if (s.design !== prev.design) {
     useDesignStoreBase.setState({ lastSavedAt: Date.now() })
   }
+  // Selecting anything (e.g. a freshly added piece) deselects the room.
+  if (s.selectedId && s.selectedRoomAt) useDesignStoreBase.setState({ selectedRoomAt: null })
 })
 
 export const useDesignStore = useDesignStoreBase

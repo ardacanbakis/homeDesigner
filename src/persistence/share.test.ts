@@ -38,6 +38,20 @@ describe('share links', () => {
     expect(await decodeDesign(good.slice(0, good.length / 2))).toBeNull()
   })
 
+  it('keeps room names and floor materials, dropping invalid ones', async () => {
+    const d = TEMPLATES[0].build()
+    d.floors[0].roomTags = [
+      { id: 'a', at: { x: 100, y: 100 }, name: 'Den', material: 'wood' },
+      { id: 'b', at: { x: 50, y: 50 }, material: 'lava' as never },
+      { id: 'c', at: { x: NaN, y: 0 }, name: 'Bad' },
+    ]
+    const decoded = await decodeDesign(await encodeDesign(d))
+    const tags = decoded!.floors[0].roomTags!
+    expect(tags).toHaveLength(1)
+    expect(tags[0]).toMatchObject({ at: { x: 100, y: 100 }, name: 'Den', material: 'wood' })
+    expect(tags[0].id).not.toBe('a')
+  })
+
   it('drops malformed items instead of crashing', async () => {
     const d = TEMPLATES[0].build()
     const bad: Design = JSON.parse(JSON.stringify(d))

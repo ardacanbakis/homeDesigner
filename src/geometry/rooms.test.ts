@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { deriveRooms, classifyRoom, pointInPolygon, roomColor, roomLabelPoint, doorSwingSide } from './rooms'
+import { deriveRooms, classifyRoom, pointInPolygon, roomColor, roomLabelPoint, doorSwingSide, roomAt, tagForRoom, roomName, roomFill, insetPolygon } from './rooms'
+import { FLOOR_MATERIALS } from './catalog'
 import type { Wall, Furniture, Opening } from '../store/types'
 
 let wallSeq = 0
@@ -237,5 +238,65 @@ describe('roomColor', () => {
 
   it('produces different colors for different ids', () => {
     expect(roomColor('abc')).not.toBe(roomColor('xyz123'))
+  })
+})
+
+describe('room tags', () => {
+  // Two rooms side by side: left 0..300, right 300..500.
+  const walls = [w(0, 0, 500, 0), w(500, 0, 500, 300), w(500, 300, 0, 300), w(0, 300, 0, 0), w(300, 0, 300, 300)]
+  const rooms = deriveRooms(walls)
+  const left = roomAt(rooms, { x: 100, y: 100 })!
+  const right = roomAt(rooms, { x: 400, y: 100 })!
+
+  it('finds the room under a point', () => {
+    expect(left).toBeDefined()
+    expect(right).toBeDefined()
+    expect(left.id).not.toBe(right.id)
+    expect(roomAt(rooms, { x: 900, y: 100 })).toBeUndefined()
+  })
+
+  it('applies a tag to whichever room contains its anchor', () => {
+    const tags = [{ id: 't', at: { x: 420, y: 250 }, name: 'Den', material: 'wood' as const }]
+    expect(tagForRoom(left, rooms, tags)).toBeUndefined()
+    expect(tagForRoom(right, rooms, tags)?.name).toBe('Den')
+    expect(roomName(right, [], tagForRoom(right, rooms, tags))).toBe('Den')
+    expect(roomName(left, [f('bed', 50, 50, { w: 160, d: 200, h: 50 })], undefined)).toBe('Bedroom')
+  })
+
+  it('uses the floor material colour as the fill when one is set', () => {
+    expect(roomFill(right, { id: 't', at: { x: 0, y: 0 }, material: 'tile' })).toEqual({ color: FLOOR_MATERIALS.tile.color, material: true })
+    expect(roomFill(left, undefined)).toEqual({ color: roomColor(left.id), material: false })
+  })
+
+  it('keeps a tag through wall edits that move the room', () => {
+    const moved = [w(0, 0, 520, 0), w(520, 0, 520, 320), w(520, 320, 0, 320), w(0, 320, 0, 0), w(280, 0, 280, 320)]
+    const rooms2 = deriveRooms(moved)
+    const tags = [{ id: 't', at: { x: 420, y: 250 }, name: 'Den' }]
+    const r = roomAt(rooms2, { x: 400, y: 100 })!
+    expect(r.id).not.toBe(right.id)
+    expect(tagForRoom(r, rooms2, tags)?.name).toBe('Den')
+  })
+
+  it('reads showers and counters as bathroom and kitchen', () => {
+    expect(classifyRoom(left, [f('shower', 20, 20, { w: 90, d: 90, h: 210 })])).toBe('Bathroom')
+    expect(classifyRoom(left, [f('counter', 20, 20, { w: 120, d: 60, h: 90 })])).toBe('Kitchen')
+  })
+})
+
+describe('insetPolygon', () => {
+  it('moves every edge of a room inward, whichever way it winds', () => {
+    const cw = [{ x: 0, y: 0 }, { x: 400, y: 0 }, { x: 400, y: 300 }, { x: 0, y: 300 }]
+    for (const verts of [cw, [...cw].reverse()]) {
+      const r = insetPolygon(verts, 10)
+      const xs = r.map(v => v.x), ys = r.map(v => v.y)
+      expect([Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)]).toEqual([10, 390, 10, 290])
+    }
+  })
+
+  it('handles L-shaped rooms (reflex corner)', () => {
+    const L = [{ x: 0, y: 0 }, { x: 300, y: 0 }, { x: 300, y: 100 }, { x: 100, y: 100 }, { x: 100, y: 300 }, { x: 0, y: 300 }]
+    const r = insetPolygon(L, 10)
+    expect(r[3]).toEqual({ x: 90, y: 90 })
+    expect(r.every(v => pointInPolygon(v, L))).toBe(true)
   })
 })

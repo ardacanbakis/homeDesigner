@@ -1,7 +1,7 @@
 import { nanoid } from 'nanoid'
-import type { Design, Floor } from '../store/types'
+import type { Design, Floor, RoomTag } from '../store/types'
 import { migrate } from './storage'
-import { CATALOG_MAP } from '../geometry/catalog'
+import { CATALOG_MAP, FLOOR_MATERIALS } from '../geometry/catalog'
 
 // Shareable links: the design is compacted (short ids, rounded numbers),
 // deflated with the native CompressionStream and base64url-encoded into the
@@ -31,6 +31,7 @@ function remapIds(design: Design, mint: () => string): Design {
       walls: f.walls.map(w => ({ ...w, id: id(w.id) })),
       openings: f.openings.map(o => ({ ...o, id: id(o.id), wallId: id(o.wallId) })),
       furniture: f.furniture.map(x => ({ ...x, id: id(x.id) })),
+      ...(f.roomTags?.length ? { roomTags: f.roomTags.map(t => ({ ...t, id: id(t.id) })) } : {}),
     })),
   }
 }
@@ -55,11 +56,24 @@ function compact(design: Design): Design {
         ...x, position: { x: r1(x.position.x), y: r1(x.position.y) }, rotation: r4(x.rotation),
         size: { w: r1(x.size.w), d: r1(x.size.d), h: r1(x.size.h) },
       })),
+      ...(f.roomTags ? { roomTags: f.roomTags.map(t => ({ ...t, at: { x: r1(t.at.x), y: r1(t.at.y) } })) } : {}),
     })),
   }
 }
 
 const finite = (...ns: unknown[]) => ns.every(n => typeof n === 'number' && Number.isFinite(n))
+
+function sanitizeTags(tags: RoomTag[]): RoomTag[] {
+  const out: RoomTag[] = []
+  for (const t of tags) {
+    if (!t || !t.at || !finite(t.at.x, t.at.y)) continue
+    const tag: RoomTag = { id: String(t.id), at: { x: t.at.x, y: t.at.y } }
+    if (typeof t.name === 'string' && t.name.trim()) tag.name = t.name.slice(0, 40)
+    if (typeof t.material === 'string' && t.material in FLOOR_MATERIALS) tag.material = t.material
+    if (tag.name || tag.material) out.push(tag)
+  }
+  return out
+}
 
 /** Drop anything malformed so a damaged or hand-edited link can't crash the editor. */
 function sanitize(design: Design): Design | null {
@@ -78,6 +92,7 @@ function sanitize(design: Design): Design | null {
       furniture: f.furniture.filter(x => x && x.kind in CATALOG_MAP && x.position && x.size
         && finite(x.position.x, x.position.y, x.rotation, x.size.w, x.size.d, x.size.h))
         .map(x => (x.customLabel !== undefined ? { ...x, customLabel: String(x.customLabel).slice(0, 32) } : x)),
+      ...(Array.isArray(f.roomTags) ? { roomTags: sanitizeTags(f.roomTags) } : {}),
     })
   }
   return floors.length ? { version: design.version, floors } : null

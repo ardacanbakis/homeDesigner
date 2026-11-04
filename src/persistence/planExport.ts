@@ -1,6 +1,6 @@
 import type { Floor, Units } from '../store/types'
-import { CATALOG_MAP } from '../geometry/catalog'
-import { deriveRooms, classifyRoom, roomHue, roomLabelPoint, pointInPolygon, doorSwingSide, doorSwingBoxes } from '../geometry/rooms'
+import { CATALOG_MAP, FLOOR_MATERIALS, isFlat } from '../geometry/catalog'
+import { deriveRooms, roomHue, roomLabelPoint, pointInPolygon, doorSwingSide, doorSwingBoxes, tagForRoom, roomName } from '../geometry/rooms'
 import { wallLength } from '../geometry/walls'
 import { formatLength, formatArea, footprintAABB, CM_PER_FOOT } from '../geometry/measure'
 
@@ -56,23 +56,31 @@ export function planToSVG(floor: Floor, opts: { units: Units; title: string; dat
 
   // ── Rooms ──────────────────────────────────────────────────────────────────
   const rooms = deriveRooms(floor.walls)
+  const tags = new Map(rooms.map(r => [r.id, tagForRoom(r, rooms, floor.roomTags)]))
   for (const r of rooms) {
-    out.push(`<polygon points="${pts(r.vertices)}" fill="${hslHex(roomHue(r.id), 0.55, 0.62)}" fill-opacity="0.18"/>`)
+    const material = tags.get(r.id)?.material
+    const fill = material
+      ? `fill="${FLOOR_MATERIALS[material].color}" fill-opacity="0.38"`
+      : `fill="${hslHex(roomHue(r.id), 0.55, 0.62)}" fill-opacity="0.18"`
+    out.push(`<polygon points="${pts(r.vertices)}" ${fill}/>`)
   }
 
-  // ── Furniture (under walls, labels upright) ─────────────────────────────────
-  for (const f of floor.furniture) {
+  // ── Furniture (under walls, labels upright; rugs beneath everything) ───────
+  const ordered = [...floor.furniture].sort((a, b) => Number(isFlat(b.kind)) - Number(isFlat(a.kind)))
+  for (const f of ordered) {
     const cat = CATALOG_MAP[f.kind]
+    const flat = isFlat(f.kind)
     const fcx = f.position.x + f.size.w / 2, fcy = f.position.y + f.size.d / 2
     const deg = (f.rotation * 180) / Math.PI
     out.push(
       `<g transform="translate(${n1(fcx)} ${n1(fcy)}) rotate(${n1(deg)})">` +
-      `<rect x="${n1(-f.size.w / 2)}" y="${n1(-f.size.d / 2)}" width="${n1(f.size.w)}" height="${n1(f.size.d)}" rx="4" ` +
-      `fill="${esc(f.color ?? cat.color)}" fill-opacity="0.35" stroke="${MUTED}" stroke-width="1.5"/></g>`,
+      `<rect x="${n1(-f.size.w / 2)}" y="${n1(-f.size.d / 2)}" width="${n1(f.size.w)}" height="${n1(f.size.d)}" rx="${flat ? 1 : 4}" ` +
+      `fill="${esc(f.color ?? cat.color)}" fill-opacity="${flat ? 0.2 : 0.35}" stroke="${MUTED}" stroke-width="${flat ? 1 : 1.5}"` +
+      `${flat ? ' stroke-dasharray="4 3"' : ''}/></g>`,
     )
     const b = footprintAABB(f)
     const short = Math.min(b.x1 - b.x0, b.y1 - b.y0)
-    if (short >= 28) {
+    if (short >= 28 && !flat) {
       const label = f.kind === 'custom' ? (f.customLabel || cat.label) : cat.label
       const fs = Math.max(7, Math.min(13, (b.x1 - b.x0) / 7))
       out.push(`<text x="${n1(fcx)}" y="${n1(fcy)}" font-size="${n1(fs)}" fill="#334155" text-anchor="middle" dominant-baseline="central">${esc(label)}</text>`)
@@ -135,7 +143,7 @@ export function planToSVG(floor: Floor, opts: { units: Units; title: string; dat
   for (const r of rooms) {
     totalArea += r.area
     const c = roomLabelPoint(r, floor.furniture, 120, 44, swings)
-    out.push(`<text x="${n1(c.x)}" y="${n1(c.y - 9)}" font-size="16" font-weight="700" fill="#0f172a" text-anchor="middle" dominant-baseline="central">${esc(classifyRoom(r, floor.furniture))}</text>`)
+    out.push(`<text x="${n1(c.x)}" y="${n1(c.y - 9)}" font-size="16" font-weight="700" fill="#0f172a" text-anchor="middle" dominant-baseline="central">${esc(roomName(r, floor.furniture, tags.get(r.id)))}</text>`)
     out.push(`<text x="${n1(c.x)}" y="${n1(c.y + 11)}" font-size="12" fill="#475569" text-anchor="middle" dominant-baseline="central">${esc(formatArea(r.area, units))}</text>`)
   }
 

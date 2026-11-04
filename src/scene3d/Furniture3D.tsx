@@ -3,7 +3,7 @@ import { ErrorBoundary } from '../ui/ErrorBoundary'
 import { useGLTF, Html } from '@react-three/drei'
 import * as THREE from 'three'
 import type { Furniture } from '../store/types'
-import { CATALOG_MAP } from '../geometry/catalog'
+import { CATALOG_MAP, isFlat } from '../geometry/catalog'
 import { useDesignStore } from '../store/design'
 import { m } from './units'
 
@@ -12,6 +12,7 @@ const BASE = import.meta.env.BASE_URL
 const MODEL_KINDS = [
   'bed', 'wardrobe', 'dresser', 'fridge', 'washer', 'stove', 'sink',
   'sofa', 'table', 'chair', 'toilet', 'bathtub', 'tv', 'desk', 'stairs',
+  'nightstand', 'bookshelf', 'lamp', 'plant', 'counter', 'shower',
 ] as const
 
 // Start loading all models immediately
@@ -33,7 +34,8 @@ function GltfModel({ kind, w, h, d }: { kind: ModelKind; w: number; h: number; d
     cloned.traverse(node => {
       if ((node as THREE.Mesh).isMesh) {
         const mesh = node as THREE.Mesh
-        mesh.castShadow = true
+        // Glass (shower screens) shouldn't throw a solid shadow.
+        mesh.castShadow = !(mesh.material as THREE.Material).transparent
         mesh.receiveShadow = true
       }
     })
@@ -77,6 +79,29 @@ function FallbackBox({ w, h, d, color }: { w: number; h: number; d: number; colo
   )
 }
 
+/** A rug: a thin slab in the item's own colour with a darker border band. */
+function Rug({ w, h, d, color }: { w: number; h: number; d: number; color: string }) {
+  const band = Math.min(w, d) * 0.08
+  const border = useMemo(() => {
+    const c = new THREE.Color(color)
+    return c.multiplyScalar(0.7)
+  }, [color])
+  const t = Math.max(h, 0.006)
+  return (
+    // Just above the room's floor finish (+5 mm) so the two never z-fight.
+    <group position={[0, 0.008, 0]}>
+      <mesh position={[0, t / 2, 0]} receiveShadow>
+        <boxGeometry args={[w, t, d]} />
+        <meshStandardMaterial color={border} roughness={1} />
+      </mesh>
+      <mesh position={[0, t + 0.0005, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[Math.max(0.01, w - band * 2), Math.max(0.01, d - band * 2)]} />
+        <meshStandardMaterial color={color} roughness={1} />
+      </mesh>
+    </group>
+  )
+}
+
 function FurnitureItem({
   item, elevation, interactive,
 }: {
@@ -107,6 +132,8 @@ function FurnitureItem({
     >
       {isCustom ? (
         <FallbackBox w={w} h={h} d={d} color={color} />
+      ) : isFlat(item.kind) ? (
+        <Rug w={w} h={h} d={d} color={color} />
       ) : (
         // A model that fails to load falls back to a sized box instead of
         // taking the scene down with it.

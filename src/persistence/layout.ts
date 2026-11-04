@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid'
-import type { Design, Floor, Wall, Opening, Furniture, FurnitureKind } from '../store/types'
+import type { Design, Floor, Wall, Opening, Furniture, FurnitureKind, FloorMaterial, RoomTag } from '../store/types'
 import { CURRENT_VERSION } from './storage'
 import { CATALOG_MAP } from '../geometry/catalog'
 
@@ -34,6 +34,16 @@ export class Plan {
   walls: Wall[] = []
   openings: Opening[] = []
   furniture: Furniture[] = []
+  roomTags: RoomTag[] = []
+
+  /** Name a room and/or give it a floor finish. Anchored at the box centre
+   *  unless `at` is given (for rooms whose centre lies outside them). */
+  room(box: Box, o: { name?: string; material?: FloorMaterial; at?: { x: number; y: number } }) {
+    const tag: RoomTag = { id: nanoid(), at: o.at ?? { x: (box.x0 + box.x1) / 2, y: (box.y0 + box.y1) / 2 } }
+    if (o.name) tag.name = o.name
+    if (o.material) tag.material = o.material
+    this.roomTags.push(tag)
+  }
 
   wall(ax: number, ay: number, bx: number, by: number, thickness = 15, height = 270): Wall {
     const w: Wall = { id: nanoid(), a: { x: ax, y: ay }, b: { x: bx, y: by }, thickness, height }
@@ -186,6 +196,7 @@ export class Plan {
 
   toDesign(name: string): Design {
     const floor: Floor = { id: nanoid(), name, height: 270, walls: this.walls, openings: this.openings, furniture: this.furniture }
+    if (this.roomTags.length) floor.roomTags = this.roomTags
     return { version: CURRENT_VERSION, floors: [floor] }
   }
 }

@@ -1,5 +1,6 @@
 import type { Wall, Furniture } from '../store/types'
 import { footprintAABB } from './measure'
+import { isFlat } from './catalog'
 
 /** Snap a furniture footprint (top-left x,y + size w,d) so its nearest edge
  *  sits flush against the inner face of any axis-aligned wall within `thr` cm.
@@ -36,6 +37,8 @@ export function snapBoxToWalls(
 /** True if two footprints' bounding boxes overlap by more than `tol` cm on both
  *  axes. Rotation-aware (exact for multiples of 90°, conservative otherwise). */
 export function footprintsOverlap(a: Furniture, b: Furniture, tol = 1): boolean {
+  // Rugs lie on the floor — furniture is meant to stand on them.
+  if (isFlat(a.kind) || isFlat(b.kind)) return false
   const A = footprintAABB(a), B = footprintAABB(b)
   const ox = Math.min(A.x1, B.x1) - Math.max(A.x0, B.x0)
   const oy = Math.min(A.y1, B.y1) - Math.max(A.y0, B.y0)

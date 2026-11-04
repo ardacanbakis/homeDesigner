@@ -3,10 +3,10 @@ import { Stage, Layer, Line, Rect, Circle, Text, Group, Arrow, Transformer } fro
 import type Konva from 'konva'
 import { useDesignStore, useActiveFloor } from '../store/design'
 import { snapPoint, wallLength, wallAngle } from '../geometry/walls'
-import { deriveRooms, classifyRoom, roomColor, roomLabelPoint, doorSwingSide, doorSwingBoxes } from '../geometry/rooms'
+import { deriveRooms, roomLabelPoint, doorSwingSide, doorSwingBoxes, roomAt, tagForRoom, roomName, roomFill, insetPolygon } from '../geometry/rooms'
 import { snapBoxToWalls, collidingIds } from '../geometry/snap'
 import { formatLength, formatArea, gridTiersFor, rotatedExtents, footprintAABB } from '../geometry/measure'
-import { CATALOG_MAP } from '../geometry/catalog'
+import { CATALOG_MAP, isFlat } from '../geometry/catalog'
 import type { Vec2 } from '../store/types'
 
 const PX_PER_CM = 1   // at scale=1, 1 cm = 1 px
@@ -50,7 +50,7 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
     addWall, moveWallEndpoint, deleteWall, deleteOpening,
     addFurniture, moveFurniture, deleteFurniture, rotateFurniture, setActiveTool,
     duplicateFurniture, nudgeFurniture, copySelection, pasteClipboard, transformFurniture,
-    theme, dragKind, units,
+    theme, dragKind, units, selectedRoomAt, selectRoom,
   } = useDesignStore()
   const { minor: MINOR_CM, major: MAJOR_CM } = gridTiersFor(units)
   const dark = theme === 'dark'
@@ -124,6 +124,14 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
     return new Map(rooms.map(r => [r.id, roomLabelPoint(r, floor.furniture, 120 / scale, 34 / scale, swings)]))
   }, [rooms, floor.walls, floor.openings, floor.furniture, scale])
 
+  const selectedRoom = selectedRoomAt ? roomAt(rooms, selectedRoomAt) : undefined
+
+  // Rugs first so everything else draws (and is clicked) on top of them.
+  const furnitureInDrawOrder = useMemo(
+    () => [...floor.furniture].sort((a, b) => Number(isFlat(b.kind)) - Number(isFlat(a.kind))),
+    [floor.furniture],
+  )
+
   /** Frame all walls + furniture on the active floor with padding. */
   const fitToView = useCallback(() => {
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
@@ -194,6 +202,7 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
         setActiveTool('select')
       }
       if (e.key === 'Escape') {
+        if (useDesignStore.getState().selectedRoomAt) selectRoom(null)
         setActiveTool('select')
         setDrawStart(null)
         setMeasureMode(false); setMeasureStart(null)
@@ -326,7 +335,7 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
     if (marquee && e.evt.button === 0) {
       const dx = marquee.b.x - marquee.a.x
       const dy = marquee.b.y - marquee.a.y
-      if (Math.hypot(dx, dy) > 4) {
+      if (cmToPx(Math.hypot(dx, dy), scale) > 4) {
         const minX = Math.min(marquee.a.x, marquee.b.x)
         const maxX = Math.max(marquee.a.x, marquee.b.x)
         const minY = Math.min(marquee.a.y, marquee.b.y)
@@ -343,17 +352,28 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
         } else {
           setSelectedIds(hits)
         }
+      } else if (!e.evt.shiftKey) {
+        // A plain click on a room's floor selects the room (name, floor finish).
+        selectRoom(roomAt(rooms, marquee.a) ? marquee.a : null)
       }
       setMarquee(null)
     }
-  }, [marquee, floor.furniture, selectedIds, setSelectedIds])
+  }, [marquee, floor.furniture, selectedIds, setSelectedIds, selectRoom, rooms, scale])
 
-  const handleDblClick = useCallback(() => {
+  const handleDblClick = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
     if (activeTool === 'wall') {
       setDrawStart(null)
       setActiveTool('select')
+      return
     }
-  }, [activeTool, setActiveTool])
+    // Double-click a room's floor to rename it straight away.
+    const t = e.target
+    if (measureMode || (t !== stageRef.current && t.name() !== 'grid' && t.name() !== 'floor')) return
+    const pos = getStageMousePos()
+    const at = stagePosToCm(pos.x, pos.y, offset, scale)
+    if (!roomAt(rooms, at)) return
+    selectRoom(at, { rename: true })
+  }, [activeTool, setActiveTool, measureMode, getStageMousePos, offset, scale, rooms, selectRoom])
 
   const cursorCm = useCallback((e: React.DragEvent): Vec2 => {
     const stageBox = stageRef.current!.container().getBoundingClientRect()
@@ -439,8 +459,10 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
         {/* Rooms layer: subtle fills + label + m² */}
         <Layer listening={false}>
           {rooms.map(room => {
-            const label = classifyRoom(room, floor.furniture)
-            const fill = roomColor(room.id)
+            const tag = tagForRoom(room, rooms, floor.roomTags)
+            const label = roomName(room, floor.furniture, tag)
+            const fill = roomFill(room, tag)
+            const isSel = selectedRoom?.id === room.id
             const pts: number[] = []
             for (const v of room.vertices) {
               const sp = cmToStagePos(v, offset, scale)
@@ -449,7 +471,14 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
             const c = cmToStagePos(roomLabelSpots.get(room.id) ?? room.centroid, offset, scale)
             return (
               <Group key={room.id}>
-                <Line points={pts} closed fill={fill} opacity={0.10} />
+                <Line points={pts} closed fill={fill.color} opacity={fill.material ? (dark ? 0.3 : 0.45) : isSel ? 0.18 : 0.10} />
+                {isSel && (
+                  // Drawn just inside the walls (polygons follow wall centrelines).
+                  <Line
+                    points={insetPolygon(room.vertices, 12).flatMap(v => { const sp = cmToStagePos(v, offset, scale); return [sp.x, sp.y] })}
+                    closed stroke="#22d3ee" strokeWidth={2} dash={[8, 5]} opacity={0.9}
+                  />
+                )}
                 {scale > 0.4 && (
                   <Text
                     x={c.x - 60}
@@ -640,13 +669,14 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
 
         {/* Furniture layer */}
         <Layer>
-          {floor.furniture.map(f => {
+          {furnitureInDrawOrder.map(f => {
             const cat = CATALOG_MAP[f.kind]
             const cx = cmToStagePos({ x: f.position.x + f.size.w / 2, y: f.position.y + f.size.d / 2 }, offset, scale)
             const pw = cmToPx(f.size.w, scale)
             const pd = cmToPx(f.size.d, scale)
             const isPrimary = selectedId === f.id
             const isInMulti = selectedIds.includes(f.id)
+            const flat = isFlat(f.kind)
             const handleSelect = (shift: boolean) => {
               if (shift) toggleSelected(f.id)
               else setSelected(f.id)
@@ -718,13 +748,27 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
                   width={pw}
                   height={pd}
                   fill={f.color ?? cat.color}
-                  opacity={0.85}
+                  opacity={flat ? 0.5 : 0.85}
                   stroke={isPrimary ? '#60a5fa' : isInMulti ? '#3b82f6' : collisions.has(f.id) ? '#f87171' : '#fff'}
                   strokeWidth={isPrimary || isInMulti || collisions.has(f.id) ? 2 : 0.5}
                   dash={collisions.has(f.id) && !isPrimary && !isInMulti ? [6, 4] : undefined}
-                  cornerRadius={3}
+                  cornerRadius={flat ? 1 : 3}
                 />
-                {scale > 0.6 && (() => {
+                {flat && (
+                  // Woven border so a rug reads as a rug, not a slab.
+                  <Rect
+                    x={-pw / 2 + Math.min(pw, pd) * 0.08}
+                    y={-pd / 2 + Math.min(pw, pd) * 0.08}
+                    width={pw - Math.min(pw, pd) * 0.16}
+                    height={pd - Math.min(pw, pd) * 0.16}
+                    stroke={readableOn(f.color ?? cat.color)}
+                    strokeWidth={1}
+                    dash={[3, 3]}
+                    opacity={0.45}
+                    listening={false}
+                  />
+                )}
+                {scale > 0.6 && (!flat || isPrimary) && (() => {
                   // Undo the nearest quarter turn so labels never read upside-down or
                   // sideways; the text box still covers exactly the item's rect, so the
                   // Transformer's bounds are unaffected.
@@ -739,7 +783,13 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
                     width={tw}
                     height={th}
                     rotation={-quarter * 90}
-                    text={`${cat.icon}\n${f.kind === 'custom' ? (f.customLabel || cat.label) : cat.label}`}
+                    text={(() => {
+                      // Icon only when the longest word wouldn't fit — never break mid-word.
+                      const label = f.kind === 'custom' ? (f.customLabel || cat.label) : cat.label
+                      const fs = Math.max(9, Math.min(14, tw / 6))
+                      const longest = Math.max(...label.split(/\s+/).map(word => word.length))
+                      return longest * fs * 0.58 <= tw - 4 ? `${cat.icon}\n${label}` : cat.icon
+                    })()}
                     fontSize={Math.max(9, Math.min(14, tw / 6))}
                     fill={readableOn(f.color ?? cat.color)}
                     align="center"

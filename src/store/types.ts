@@ -34,6 +34,13 @@ export type FurnitureKind =
   | 'bathtub'
   | 'desk'
   | 'stairs'
+  | 'nightstand'
+  | 'bookshelf'
+  | 'lamp'
+  | 'plant'
+  | 'rug'
+  | 'counter'
+  | 'shower'
   | 'custom'
 
 export type Furniture = {
@@ -46,6 +53,17 @@ export type Furniture = {
   customLabel?: string // only for kind='custom'
 }
 
+export type FloorMaterial = 'wood' | 'tile' | 'carpet' | 'concrete' | 'marble'
+
+/** User overrides for a room. Rooms are derived from walls, so a tag is anchored
+ *  at a point and applies to whichever room contains it — surviving wall edits. */
+export type RoomTag = {
+  id: string
+  at: Vec2
+  name?: string
+  material?: FloorMaterial
+}
+
 export type Floor = {
   id: string
   name: string
@@ -53,6 +71,7 @@ export type Floor = {
   walls: Wall[]
   openings: Opening[]
   furniture: Furniture[]
+  roomTags?: RoomTag[]
 }
 
 export type Design = {

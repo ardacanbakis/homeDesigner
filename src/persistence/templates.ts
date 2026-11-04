@@ -32,13 +32,17 @@ function studio(): Design {
   // Dining for two
   p.at('table', 290, 150, { w: 90, d: 60 })
   p.chairsAround(290, 150, 90, 60, { left: 1, right: 1 })
-  // Lounge: sofa against the south wall facing the room, coffee table in front
+  // Lounge: sofa against the south wall facing the room, coffee table on a rug
   p.place('sofa', living, 'S', { w: 180, d: 85, align: 0 })
+  p.at('rug', 104, 290, { w: 160, d: 110 })
   p.at('table', 104, 262, { w: 80, d: 44 })
+  p.at('lamp', 222, 366, { w: 36, d: 36 })
   // Bathroom
   p.at('sink', 462, 269, { w: 44, d: 40 })
   p.corner('toilet', bath, 'NE', { w: 40, d: 60 })
   p.lengthwise('bathtub', bath, 'S', { w: 75, d: 160 })
+  p.room(top, { material: 'wood', at: { x: 200, y: 200 } })
+  p.room(bath, { material: 'tile' })
   return p.toDesign('Studio')
 }
 
@@ -64,15 +68,20 @@ function oneBed(): Design {
   // Living: sofa on the west wall facing the TV, which sits on the divider
   // between the bedroom and bathroom doorways
   p.place('sofa', B(0, 200, 400, 440), 'W', { w: 190, d: 85 })
+  p.at('rug', 215, 320, { w: 180, d: 140 })
   p.at('table', 235, 320, { w: 100, d: 55 })
   p.at('tv', 378.5, 306, { w: 100, d: 15, back: 'E' })
   // Bedroom: bed with its headboard on the east wall, dresser opposite the door
   p.place('bed', bedroom, 'E', { w: 150, d: 200, align: 0 })
+  p.at('nightstand', 606, 187, { w: 42, d: 40, back: 'E' })
   p.place('dresser', bedroom, 'S', { w: 90, d: 45, align: 1 })
   // Bathroom
   p.lengthwise('bathtub', bath, 'N', { w: 75, d: 150, align: 1 })
   p.corner('toilet', bath, 'SE', { w: 40, d: 65 })
   p.place('sink', bath, 'S', { w: 55, d: 42, align: 0.6 })
+  p.room(B(0, 0, 400, 440), { material: 'wood' })
+  p.room(bedroom, { material: 'carpet' })
+  p.room(bath, { material: 'tile' })
   return p.toDesign('1-Bedroom Apartment')
 }
 
@@ -101,13 +110,18 @@ function twoBed(): Design {
   // Living: sofa faces the TV across a coffee table
   p.place('sofa', living, 'W', { w: 200, d: 90 })
   p.place('tv', B(0, 0, 440, 180), 'E', { w: 110, d: 15 })
+  p.at('rug', 205, 165, { w: 170, d: 120 })
   p.at('table', 230, 150, { w: 110, d: 60 })
+  p.corner('plant', living, 'NW', { w: 34, d: 34 })
+  p.place('bookshelf', living, 'S', { align: 0.1 })
   // Kitchen-diner
-  p.row(['fridge', 'stove', 'sink'], kitchen, 'N', { margin: 14, gap: 6, sizes: { fridge: { w: 70, d: 62 }, stove: { w: 60, d: 60 }, sink: { w: 60, d: 55 } } })
+  p.row(['fridge', 'counter', 'stove', 'sink'], kitchen, 'N', { margin: 14, gap: 6, sizes: { fridge: { w: 70, d: 62 }, counter: { w: 60, d: 60 }, stove: { w: 60, d: 60 }, sink: { w: 60, d: 55 } } })
   p.at('table', 600, 190, { w: 110, d: 70 })
   p.chairsAround(600, 190, 110, 70, { top: 1, bottom: 1, right: 1 })
   // Bedroom
   p.place('bed', bedroom, 'W', { w: 160, d: 200 })
+  p.at('nightstand', 32, 329, { w: 40, d: 36, back: 'W' })
+  p.at('nightstand', 32, 531, { w: 40, d: 36, back: 'W' })
   p.place('wardrobe', bedroom, 'E', { w: 120, d: 58, align: 0 })
   p.place('dresser', bedroom, 'S', { w: 100, d: 50, align: 0.75 })
   // Bathroom
@@ -117,6 +131,12 @@ function twoBed(): Design {
   // Office: desk on the south wall, chair facing it
   p.place('desk', office, 'S', { w: 110, d: 60 })
   p.at('chair', 670, 460, { w: 46, d: 46 })
+  p.place('bookshelf', office, 'W', { align: 0.5 })
+  p.room(living, { material: 'wood' })
+  p.room(kitchen, { material: 'tile' })
+  p.room(bedroom, { material: 'wood' })
+  p.room(bath, { material: 'marble' })
+  p.room(office, { material: 'wood' })
   return p.toDesign('2-Bedroom Apartment')
 }
 
@@ -140,23 +160,33 @@ function familyHouse(): Design {
 
   // Lounge: sofa on the west wall, TV unit facing it
   p.place('sofa', B(0, 0, 440, 340), 'W', { w: 220, d: 95, align: 0.4 })
+  p.at('rug', 230, 175, { w: 190, d: 150 })
   p.at('table', 235, 160, { w: 120, d: 65 })
   p.at('tv', 400, 160, { w: 130, d: 15, back: 'E' })
+  p.corner('plant', B(0, 0, 440, 340), 'NW', { w: 34, d: 34 })
+  p.at('lamp', 34, 300, { w: 40, d: 40 })
   // Kitchen run + dining table for four
-  p.row(['fridge', 'stove', 'sink'], kitchen, 'N', { margin: 16, gap: 6, sizes: { fridge: { w: 70, d: 62 }, stove: { w: 60, d: 60 }, sink: { w: 60, d: 55 } } })
+  p.row(['fridge', 'stove', 'counter', 'sink'], kitchen, 'N', { margin: 16, gap: 6, sizes: { fridge: { w: 70, d: 62 }, stove: { w: 60, d: 60 }, counter: { w: 60, d: 60 }, sink: { w: 60, d: 55 } } })
   p.at('table', 690, 185, { w: 150, d: 85 })
   p.chairsAround(690, 185, 150, 85, { top: 2, bottom: 2 })
   // Main bedroom
   p.at('bed', 114, 546, { w: 160, d: 200, back: 'W' })
+  p.at('nightstand', 32, 444, { w: 40, d: 36, back: 'W' })
   p.place('wardrobe', B(0, 340, 150, 640), 'N', { w: 120, d: 58, align: 0 })
   // Bedroom 2: bed, dresser and a study desk
   p.place('bed', bed2, 'S', { w: 140, d: 200, align: 1 })
+  p.at('nightstand', 384, 606, { w: 40, d: 40, back: 'S' })
   p.place('dresser', bed2, 'W', { w: 90, d: 45, align: 1 })
   p.at('desk', 341.5, 480, { w: 80, d: 55, back: 'W' })
   // Family bathroom
   p.corner('toilet', bath, 'NE', { w: 40, d: 68 })
   p.place('sink', bath, 'N', { w: 60, d: 45, align: 0.75 })
   p.lengthwise('bathtub', bath, 'S', { w: 80, d: 170 })
+  p.at('shower', 619, 475, { w: 90, d: 90, back: 'W' })
+  p.room(B(0, 0, 840, 340), { material: 'wood' })
+  p.room(B(0, 340, 300, 640), { name: 'Main Bedroom', material: 'wood' })
+  p.room(bed2, { name: 'Bedroom 2', material: 'carpet' })
+  p.room(bath, { material: 'marble' })
   return p.toDesign('Family House')
 }
 
@@ -186,10 +216,15 @@ function officeSuite(): Design {
   // Meeting room
   p.at('table', 660, 105, { w: 130, d: 80 })
   p.chairsAround(660, 105, 130, 80, { top: 2, bottom: 2 })
+  p.corner('plant', B(520, 0, 760, 260), 'NW', { w: 40, d: 40 })
+  p.corner('plant', B(0, 0, 520, 260), 'NE', { w: 40, d: 40 })
   // Restroom
   const wc = B(0, 360, 220, 520)
   p.corner('toilet', wc, 'NW', { w: 40, d: 68 })
   p.corner('sink', wc, 'SW', { w: 55, d: 42, back: 'W' })
+  p.room(B(0, 0, 760, 520), { name: 'Open Office', material: 'concrete', at: { x: 380, y: 300 } })
+  p.room(B(520, 0, 760, 260), { material: 'carpet' })
+  p.room(wc, { name: 'Restroom', material: 'tile' })
   return p.toDesign('Office Suite')
 }
 

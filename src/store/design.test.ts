@@ -242,3 +242,47 @@ describe('design store — transformFurniture', () => {
     expect(useDesignStore.temporal.getState().pastStates.length).toBe(before + 1)
   })
 })
+
+describe('design store — rooms', () => {
+  function box() {
+    const { addWall } = store.getState()
+    addWall({ x: 0, y: 0 }, { x: 400, y: 0 })
+    addWall({ x: 400, y: 0 }, { x: 400, y: 300 })
+    addWall({ x: 400, y: 300 }, { x: 0, y: 300 })
+    addWall({ x: 0, y: 300 }, { x: 0, y: 0 })
+  }
+  const tags = () => store.getState().design.floors[0].roomTags ?? []
+
+  it('selecting a room clears other selection, and vice versa', () => {
+    box()
+    store.getState().addFurniture('bed', { x: 10, y: 10 })
+    store.getState().selectRoom({ x: 200, y: 150 })
+    expect(store.getState().selectedId).toBeNull()
+    expect(store.getState().selectedRoomAt).toEqual({ x: 200, y: 150 })
+    store.getState().setSelected(store.getState().design.floors[0].furniture[0].id)
+    expect(store.getState().selectedRoomAt).toBeNull()
+  })
+
+  it('names and floors a room, merging edits into one tag', () => {
+    box()
+    store.getState().setRoomTag({ x: 100, y: 100 }, { name: '  Den  ' })
+    store.getState().setRoomTag({ x: 300, y: 200 }, { material: 'wood' })
+    expect(tags()).toHaveLength(1)
+    expect(tags()[0]).toMatchObject({ name: 'Den', material: 'wood', at: { x: 100, y: 100 } })
+  })
+
+  it('drops the tag when everything is reset to automatic, and undoes in one step', () => {
+    box()
+    store.getState().setRoomTag({ x: 100, y: 100 }, { name: 'Den', material: 'tile' })
+    store.getState().setRoomTag({ x: 100, y: 100 }, { name: '', material: null })
+    expect(tags()).toHaveLength(0)
+    store.temporal.getState().undo()
+    expect(tags()[0]).toMatchObject({ name: 'Den', material: 'tile' })
+  })
+
+  it('ignores points outside any room', () => {
+    box()
+    store.getState().setRoomTag({ x: 900, y: 900 }, { name: 'Nowhere' })
+    expect(tags()).toHaveLength(0)
+  })
+})

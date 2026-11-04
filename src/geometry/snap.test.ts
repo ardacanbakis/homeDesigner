@@ -59,3 +59,11 @@ describe('collidingIds', () => {
     expect(ids.has(far.id)).toBe(false)
   })
 })
+
+describe('rugs', () => {
+  it('never count as overlapping — furniture stands on them', () => {
+    const rug: Furniture = { ...furn(0, 0, 200, 140), id: 'rug', kind: 'rug' }
+    expect(footprintsOverlap(rug, furn(50, 50))).toBe(false)
+    expect(collidingIds([rug, furn(50, 50), furn(400, 400)]).size).toBe(0)
+  })
+})

@@ -70,3 +70,13 @@ describe('planToSVG', () => {
     }
   })
 })
+
+describe('planToSVG — room tags', () => {
+  it('uses custom room names and floor-finish fills (escaped)', () => {
+    const floor = tFloor()
+    floor.roomTags = [{ id: 't', at: { x: 300, y: 270 }, name: 'Den & "Library"', material: 'wood' }]
+    const svg = planToSVG(floor, { units: 'cm', title: 'Plan' })
+    expect(svg).toContain('Den &amp; &quot;Library&quot;')
+    expect(svg).toContain('fill="#B08A5E" fill-opacity="0.38"')
+  })
+})

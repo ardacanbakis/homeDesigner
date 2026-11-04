@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { TEMPLATES } from './templates'
-import { deriveRooms, doorSwingSide, pointInPolygon } from '../geometry/rooms'
+import { deriveRooms, doorSwingSide, pointInPolygon, roomAt } from '../geometry/rooms'
 import { wallLength } from '../geometry/walls'
 import { footprintAABB } from '../geometry/measure'
 import { footprintsOverlap } from '../geometry/snap'
@@ -84,6 +84,14 @@ describe('built-in templates', () => {
         const found = issues(floor)
         expect(found, `\n  ${found.join('\n  ')}`).toEqual([])
       }
+    })
+
+    it(`${t.name} names and floors rooms with one tag per room`, () => {
+      const floor = t.build().floors[0]
+      const rooms = deriveRooms(floor.walls)
+      const owners = (floor.roomTags ?? []).map(tag => roomAt(rooms, tag.at)?.id)
+      expect(owners.every(Boolean), 'tag anchored outside every room').toBe(true)
+      expect(new Set(owners).size).toBe(owners.length)
     })
 
     it(`${t.name} has enclosed rooms and every door opens into one`, () => {

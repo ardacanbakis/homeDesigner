@@ -5,20 +5,24 @@ import type { FurnitureKind } from '../store/types'
 import { formatLength } from '../geometry/measure'
 import { LengthField } from './LengthField'
 
-const CATEGORIES: { id: FurnitureCategory; label: string; icon: string }[] = [
-  { id: 'bedroom',   label: 'Bedroom',   icon: '🛏️' },
-  { id: 'kitchen',   label: 'Kitchen',   icon: '🍳' },
-  { id: 'living',    label: 'Living',    icon: '🛋️' },
-  { id: 'bathroom',  label: 'Bathroom',  icon: '🚿' },
-  { id: 'office',    label: 'Office',    icon: '🖥️' },
-  { id: 'structure', label: 'Structure', icon: '🧱' },
+type Tab = FurnitureCategory | 'all'
+
+const CATEGORIES: { id: Tab; label: string; icon: string }[] = [
+  { id: 'all',       label: 'All',     icon: '✦' },
+  { id: 'bedroom',   label: 'Bed',     icon: '🛏️' },
+  { id: 'kitchen',   label: 'Kitchen', icon: '🍳' },
+  { id: 'living',    label: 'Living',  icon: '🛋️' },
+  { id: 'bathroom',  label: 'Bath',    icon: '🚿' },
+  { id: 'office',    label: 'Office',  icon: '🖥️' },
+  { id: 'decor',     label: 'Decor',   icon: '🪴' },
+  { id: 'structure', label: 'Build',   icon: '🧱' },
 ]
 
 const PRESET_COLORS = ['#64748b', '#8b5e3c', '#4a7c59', '#3b6ea8', '#8b3a3a', '#7b5ea7', '#a07c3a', '#3a7a7a']
 
 export function Palette() {
   const { viewMode, addFurniture, addCustomFurniture, setActiveTool, setDragKind, units } = useDesignStore()
-  const [activeCategory, setActiveCategory] = useState<FurnitureCategory>('bedroom')
+  const [activeCategory, setActiveCategory] = useState<Tab>('bedroom')
   const [dragging, setDragging] = useState<FurnitureKind | null>(null)
   const [showCustomForm, setShowCustomForm] = useState(false)
   const [customLabel, setCustomLabel] = useState('My Object')
@@ -31,7 +35,7 @@ export function Palette() {
   const query = search.trim().toLowerCase()
   const items = query
     ? CATALOG.filter(e => e.kind !== 'custom' && e.label.toLowerCase().includes(query))
-    : CATALOG.filter(e => e.category === activeCategory)
+    : CATALOG.filter(e => e.kind !== 'custom' && (activeCategory === 'all' || e.category === activeCategory))
 
   const handleDragStart = (e: React.DragEvent, entry: CatalogEntry) => {
     setDragging(entry.kind)
@@ -85,7 +89,7 @@ export function Palette() {
 
       {/* Category tabs — hidden while searching */}
       {!query && (
-        <div className="grid grid-cols-3 gap-1 p-2 border-b border-gray-700/80">
+        <div className="grid grid-cols-4 gap-1 p-2 border-b border-gray-700/80">
           {CATEGORIES.map(cat => (
             <button
               key={cat.id}
