@@ -1,5 +1,5 @@
 import { Canvas, useThree, useFrame } from '@react-three/fiber'
-import { OrbitControls, PointerLockControls, Grid, Environment, ContactShadows } from '@react-three/drei'
+import { OrbitControls, PointerLockControls, Grid, Environment, Lightformer, ContactShadows } from '@react-three/drei'
 import { Suspense, useCallback, useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { useDesignStore, floorElevations } from '../store/design'
@@ -93,7 +93,7 @@ function useFrameDesign() {
         radius = Math.max(width, depth, height, 2)
       }
 
-      const dist = radius * 1.9 + 2
+      const dist = radius * 1.45 + 1.5
       camera.position.set(center.x + dist * 0.8, center.y + dist * 0.9, center.z + dist)
       camera.near = 0.1
       camera.far = dist * 20
@@ -119,7 +119,7 @@ function applyPreset(mode: CameraMode, camera: THREE.Camera, controls: ControlsL
   const depth = b ? m(b.maxZ - b.minZ) : 6
   const height = b ? m(b.maxY) : 3
   const radius = Math.max(width, depth, height, 2)
-  const dist = radius * 1.9 + 2
+  const dist = radius * 1.45 + 1.5
   const target = new THREE.Vector3(cx, Math.min(height / 2, 1.5), cz)
 
   if (mode === 'top') camera.position.set(cx, dist * 1.4, cz + 0.001) // tiny offset so lookAt doesn't degenerate
@@ -212,12 +212,24 @@ function SceneContent({ onShotReady }: { onShotReady: (fn: () => void) => void }
         />
       )}
       <Walker enabled={cameraMode === 'walk'} floorBoundsRef={floorBoundsRef} />
-      <Environment preset="apartment" />
+      {/* Image-based lighting baked from in-scene light panels. Presets download
+          an HDR from a third-party CDN at runtime; when that's blocked (offline,
+          firewalls, CDN outage) the load throws and took the whole app down. */}
+      <Environment resolution={256}>
+        <group rotation={[-Math.PI / 3, 0, 0]}>
+          <Lightformer intensity={4} rotation-x={Math.PI / 2} position={[0, 5, -9]} scale={[10, 10, 1]} />
+          <Lightformer intensity={2} rotation-y={Math.PI / 2} position={[-5, 1, -1]} scale={[10, 2, 1]} />
+          <Lightformer intensity={2} rotation-y={Math.PI / 2} position={[-5, -1, -1]} scale={[10, 2, 1]} />
+          <Lightformer intensity={2} rotation-y={-Math.PI / 2} position={[10, 1, 0]} scale={[20, 2, 1]} />
+        </group>
+      </Environment>
       <hemisphereLight args={['#ffffff', '#444455', 0.6]} />
       <directionalLight
         position={[10, 18, 8]}
         intensity={1.6}
         castShadow
+        shadow-bias={-0.0004}
+        shadow-normalBias={0.03}
         shadow-mapSize={[2048, 2048]}
         shadow-camera-left={-30}
         shadow-camera-right={30}

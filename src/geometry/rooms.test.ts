@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { deriveRooms, classifyRoom, pointInPolygon, roomColor } from './rooms'
-import type { Wall, Furniture } from '../store/types'
+import { deriveRooms, classifyRoom, pointInPolygon, roomColor, roomLabelPoint, doorSwingSide } from './rooms'
+import type { Wall, Furniture, Opening } from '../store/types'
 
 let wallSeq = 0
 function w(ax: number, ay: number, bx: number, by: number): Wall {
@@ -156,6 +156,50 @@ describe('classifyRoom', () => {
       f('desk', 30, 180, { w: 140, d: 64, h: 75 }),
     ]
     expect(classifyRoom(room, items)).toBe('Office')
+  })
+
+  it('labels a table with chairs as a Meeting room when the floor is an office', () => {
+    const items = [
+      f('table', 100, 100, { w: 120, d: 80, h: 75 }),
+      f('chair', 100, 50), f('chair', 160, 50),
+      f('desk', 900, 900, { w: 140, d: 70, h: 75 }), f('desk', 900, 1000, { w: 140, d: 70, h: 75 }),
+    ]
+    expect(classifyRoom(room, items)).toBe('Meeting')
+    expect(classifyRoom(room, items.slice(0, 3))).toBe('Dining')
+  })
+})
+
+describe('roomLabelPoint', () => {
+  const [room] = deriveRooms([w(0, 0, 400, 0), w(400, 0, 400, 300), w(400, 300, 0, 300), w(0, 300, 0, 0)])
+
+  it('uses the centroid when the room is empty', () => {
+    const p = roomLabelPoint(room, [], 100, 40)
+    expect(Math.hypot(p.x - 200, p.y - 150)).toBeLessThan(15)
+  })
+
+  it('moves the label off furniture sitting on the centroid', () => {
+    const table = f('table', 140, 110, { w: 120, d: 80, h: 75 }) // covers the centre
+    const p = roomLabelPoint(room, [table], 100, 40)
+    const clear = p.x + 50 <= 140 || p.x - 50 >= 260 || p.y + 20 <= 110 || p.y - 20 >= 190
+    expect(clear).toBe(true)
+  })
+})
+
+describe('doorSwingSide', () => {
+  // Two rooms side by side: big (0..300) and small (300..400), split at x=300.
+  const walls = [w(0, 0, 400, 0), w(400, 0, 400, 200), w(400, 200, 0, 200), w(0, 200, 0, 0), w(300, 0, 300, 200)]
+  const rooms = deriveRooms(walls)
+  const door = (wall: Wall, offset: number): Opening =>
+    ({ id: 'd', wallId: wall.id, type: 'door', offset, width: 80, height: 210, sillHeight: 0 })
+
+  it('swings an interior door into the smaller room', () => {
+    const div = walls[4] // (300,0)→(300,200): left-hand normal points +x, into the small room
+    expect(doorSwingSide(div, door(div, 60), walls, rooms)).toBe(1)
+  })
+
+  it('swings an exterior door into the building', () => {
+    const north = walls[0] // (0,0)→(400,0): left-hand normal points −y, outside
+    expect(doorSwingSide(north, door(north, 100), walls, rooms)).toBe(-1)
   })
 })
 

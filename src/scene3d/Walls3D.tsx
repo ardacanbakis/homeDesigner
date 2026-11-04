@@ -3,6 +3,7 @@ import * as THREE from 'three'
 import type { ThreeEvent } from '@react-three/fiber'
 import type { Wall, Opening } from '../store/types'
 import { wallAngle, wallLength } from '../geometry/walls'
+import { deriveRooms, doorSwingSide } from '../geometry/rooms'
 import { m } from './units'
 import { useDesignStore } from '../store/design'
 
@@ -10,7 +11,7 @@ const WALL_COLOR = '#d4d8e0'
 const WALL_SELECTED = '#60a5fa'
 const FRAME = 0.05        // frame member width (m)
 const LEAF_T = 0.04       // door leaf thickness (m)
-const DOOR_OPEN = -1.15   // door leaf swing (rad) — shown ajar so rooms read as connected
+const DOOR_OPEN = 1.15    // door leaf swing (rad) — shown ajar so rooms read as connected
 
 function buildWallGeometry(len: number, height: number, thickness: number, openings: Opening[]): THREE.BufferGeometry {
   const shape = new THREE.Shape()
@@ -41,8 +42,10 @@ function buildWallGeometry(len: number, height: number, thickness: number, openi
 
 /** Door (frame + swung leaf + handles) or window (frame + glass + mullions + sill),
  *  drawn in the wall's local space: x along the wall, y up, z through its thickness. */
-function OpeningMesh({ op, len, height, thickness, opacity, selected, onSelect }: {
+function OpeningMesh({ op, len, height, thickness, opacity, selected, swing, onSelect }: {
   op: Opening; len: number; height: number; thickness: number; opacity: number; selected: boolean
+  /** Side the door opens into (see doorSwingSide), matching the 2D plan. */
+  swing: 1 | -1
   onSelect?: (e: ThreeEvent<MouseEvent>) => void
 }) {
   const x0 = m(op.offset) - len / 2
@@ -68,8 +71,9 @@ function OpeningMesh({ op, len, height, thickness, opacity, selected, onSelect }
         const handleY = Math.min(leafH / 2 - 0.1, 1.0 - leafH / 2) // ~1 m above the floor
         const metal = <meshStandardMaterial color="#c9c9c9" metalness={0.8} roughness={0.25} transparent={fade} opacity={opacity} />
         return (
-          // Hinged on the inner edge of the left jamb.
-          <group position={[x0 + FRAME, y0 + leafH / 2, 0]} rotation={[0, DOOR_OPEN, 0]}>
+          // Hinged on the inner edge of the start jamb. A positive Y rotation swings
+          // the leaf toward local −z, which is the wall's left-hand normal in plan.
+          <group position={[x0 + FRAME, y0 + leafH / 2, 0]} rotation={[0, swing * DOOR_OPEN, 0]}>
             <mesh position={[leafW / 2, 0, 0]} castShadow receiveShadow>
               <boxGeometry args={[leafW, leafH, LEAF_T]} />
               <meshStandardMaterial color="#9a7350" roughness={0.55} transparent={fade} opacity={opacity} />
@@ -100,9 +104,10 @@ function OpeningMesh({ op, len, height, thickness, opacity, selected, onSelect }
 }
 
 function WallMesh({
-  wall, wallOpenings, elevation, selectedId, interactive,
+  wall, wallOpenings, elevation, selectedId, interactive, swings,
 }: {
   wall: Wall; wallOpenings: Opening[]; elevation: number; selectedId: string | null; interactive: boolean
+  swings: Map<string, 1 | -1>
 }) {
   const setSelected = useDesignStore(s => s.setSelected)
 
@@ -152,6 +157,7 @@ function WallMesh({
           thickness={thickness}
           opacity={opacity}
           selected={interactive && selectedId === op.id}
+          swing={swings.get(op.id) ?? 1}
           onSelect={interactive ? (e => { e.stopPropagation(); setSelected(op.id) }) : undefined}
         />
       ))}
@@ -165,6 +171,16 @@ export function Walls3D({
   walls: Wall[]; openings: Opening[]; elevation: number; interactive?: boolean
 }) {
   const selectedId = useDesignStore(s => s.selectedId)
+  // Door swing sides use the same rule as the 2D plan and the export.
+  const swings = useMemo(() => {
+    const rooms = deriveRooms(walls)
+    const out = new Map<string, 1 | -1>()
+    for (const o of openings) {
+      const w = walls.find(x => x.id === o.wallId)
+      if (o.type === 'door' && w) out.set(o.id, doorSwingSide(w, o, walls, rooms))
+    }
+    return out
+  }, [walls, openings])
   return (
     <group>
       {walls.map(w => (
@@ -175,6 +191,7 @@ export function Walls3D({
           elevation={elevation}
           selectedId={selectedId}
           interactive={interactive}
+          swings={swings}
         />
       ))}
     </group>

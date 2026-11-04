@@ -1,4 +1,9 @@
-import type { Vec2, Wall, Furniture, FurnitureKind } from '../store/types'
+import type { Vec2, Wall, Opening, Furniture, FurnitureKind } from '../store/types'
+import { footprintAABB } from './measure'
+import { wallLength } from './walls'
+
+/** Axis-aligned box in cm. */
+export type Box = { x0: number; y0: number; x1: number; y1: number }
 
 /** A derived room: a closed polygon traced from wall loops. */
 export type Room = {
@@ -257,17 +262,102 @@ export function classifyRoom(room: Room, furniture: Furniture[]): string {
   if (kitchen) return 'Kitchen'
   if (deskCount === 1) return 'Office'
   if (living) return 'Living'
+  // A table ringed by chairs reads as a meeting room when the floor is an office.
+  if (table && chairs >= 2 && furniture.filter(f => f.kind === 'desk').length >= 2) return 'Meeting'
   if (table && chairs >= 2) return 'Dining'
   if (table) return 'Dining'
   if (bath) return 'Bathroom'
   return 'Room'
 }
 
-/** Deterministic, gentle fill color from the room id. */
-export function roomColor(id: string): string {
-  // Hash the id → hue, fixed saturation/lightness for a calm pastel palette.
+/** Where to put a w×h (cm) room label: a point whose label box sits fully inside
+ *  the room and overlaps furniture as little as possible, preferring spots near
+ *  the centroid. Falls back to the centroid when the room is too small. */
+export function roomLabelPoint(room: Room, furniture: Furniture[], w: number, h: number, obstacles: Box[] = []): Vec2 {
+  const xs = room.vertices.map(v => v.x), ys = room.vertices.map(v => v.y)
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys)
+  const step = Math.max(6, Math.min(x1 - x0, y1 - y0) / 14)
+  const boxes = [...furniture.map(footprintAABB), ...obstacles]
+  const inRoom = (x: number, y: number) => pointInPolygon({ x, y }, room.vertices)
+  const { centroid: c } = room
+  let best = c, bestScore = Infinity
+  for (let y = y0 + h / 2; y <= y1 - h / 2 + 1e-6; y += step) {
+    for (let x = x0 + w / 2; x <= x1 - w / 2 + 1e-6; x += step) {
+      const l = x - w / 2, r = x + w / 2, t = y - h / 2, b = y + h / 2
+      const m = 10 // keep clear of the wall's inner face (room polygons follow wall centrelines)
+      if (!inRoom(x, y) || !inRoom(l - m, t - m) || !inRoom(r + m, t - m) || !inRoom(l - m, b + m) || !inRoom(r + m, b + m)) continue
+      let overlap = 0
+      for (const f of boxes) {
+        const ox = Math.min(r, f.x1) - Math.max(l, f.x0)
+        const oy = Math.min(b, f.y1) - Math.max(t, f.y0)
+        if (ox > 0 && oy > 0) overlap += ox * oy
+      }
+      // Any overlap outweighs distance, so a clear spot always wins.
+      const score = overlap * 10 + Math.hypot(x - c.x, y - c.y)
+      if (score < bestScore) { bestScore = score; best = { x, y } }
+    }
+  }
+  return best
+}
+
+/** Which side a door swings to: +1 = the wall's left-hand normal (u.y, −u.x),
+ *  −1 = the other side. An interior door swings into the smaller of the two
+ *  rooms it connects (into the bedroom or bathroom, not the living room); an
+ *  exterior door swings into the building. Shared by the 2D editor, the 3D view
+ *  and the plan export so all three agree. */
+export function doorSwingSide(wall: Wall, opening: Opening, walls: Wall[], rooms: Room[]): 1 | -1 {
+  const len = wallLength(wall)
+  if (len === 0) return 1
+  const ux = (wall.b.x - wall.a.x) / len, uy = (wall.b.y - wall.a.y) / len
+  const nx = uy, ny = -ux
+  const s = opening.offset + opening.width / 2
+  const mx = wall.a.x + ux * s, my = wall.a.y + uy * s
+  const probe = wall.thickness / 2 + 30
+  const roomAt = (x: number, y: number) =>
+    rooms.filter(r => pointInPolygon({ x, y }, r.vertices)).sort((p, q) => p.area - q.area)[0]
+  const plus = roomAt(mx + nx * probe, my + ny * probe)
+  const minus = roomAt(mx - nx * probe, my - ny * probe)
+  if (plus && minus) return plus.area <= minus.area ? 1 : -1
+  if (plus) return 1
+  if (minus) return -1
+
+  // No enclosed rooms yet (open plan / mid-draw): swing toward the floor's middle.
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
+  for (const w of walls) {
+    x0 = Math.min(x0, w.a.x, w.b.x); x1 = Math.max(x1, w.a.x, w.b.x)
+    y0 = Math.min(y0, w.a.y, w.b.y); y1 = Math.max(y1, w.a.y, w.b.y)
+  }
+  return nx * ((x0 + x1) / 2 - mx) + ny * ((y0 + y1) / 2 - my) < 0 ? -1 : 1
+}
+
+/** Axis-aligned box covering each door's swing (leaf + arc), for keeping labels clear. */
+export function doorSwingBoxes(walls: Wall[], openings: Opening[], rooms: Room[]): Box[] {
+  const out: Box[] = []
+  for (const o of openings) {
+    if (o.type !== 'door') continue
+    const w = walls.find(x => x.id === o.wallId)
+    const len = w ? wallLength(w) : 0
+    if (!w || !len) continue
+    const ux = (w.b.x - w.a.x) / len, uy = (w.b.y - w.a.y) / len
+    const side = doorSwingSide(w, o, walls, rooms)
+    const nx = uy * side * o.width, ny = -ux * side * o.width
+    const hx = w.a.x + ux * o.offset, hy = w.a.y + uy * o.offset
+    const jx = hx + ux * o.width, jy = hy + uy * o.width
+    const xs = [hx, jx, hx + nx, jx + nx], ys = [hy, jy, hy + ny, jy + ny]
+    out.push({ x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) })
+  }
+  return out
+}
+
+/** Deterministic hue (0–359) from the room id. */
+export function roomHue(id: string): number {
   let h = 0
   for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0
-  const hue = Math.abs(h) % 360
-  return `hsl(${hue} 55% 50%)`
+  return Math.abs(h) % 360
+}
+
+/** Deterministic, gentle fill color from the room id. */
+export function roomColor(id: string): string {
+  // Fixed saturation/lightness for a calm pastel palette.
+  return `hsl(${roomHue(id)} 55% 50%)`
 }

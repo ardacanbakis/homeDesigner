@@ -1,4 +1,5 @@
 import { Suspense, useMemo } from 'react'
+import { ErrorBoundary } from '../ui/ErrorBoundary'
 import { useGLTF, Html } from '@react-three/drei'
 import * as THREE from 'three'
 import type { Furniture } from '../store/types'
@@ -107,9 +108,13 @@ function FurnitureItem({
       {isCustom ? (
         <FallbackBox w={w} h={h} d={d} color={color} />
       ) : (
-        <Suspense fallback={<FallbackBox w={w} h={h} d={d} color={color} />}>
-          <GltfModel kind={item.kind as ModelKind} w={w} h={h} d={d} />
-        </Suspense>
+        // A model that fails to load falls back to a sized box instead of
+        // taking the scene down with it.
+        <ErrorBoundary fallback={<FallbackBox w={w} h={h} d={d} color={color} />}>
+          <Suspense fallback={<FallbackBox w={w} h={h} d={d} color={color} />}>
+            <GltfModel kind={item.kind as ModelKind} w={w} h={h} d={d} />
+          </Suspense>
+        </ErrorBoundary>
       )}
 
       {/* Custom objects always show their label; catalog items show label only when selected */}

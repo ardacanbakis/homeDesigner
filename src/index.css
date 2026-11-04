@@ -3,28 +3,40 @@
 /* Tailwind v4: opt-in `light:` variant driven by <html data-theme="light">. */
 @custom-variant light (&:where([data-theme=light], [data-theme=light] *));
 
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+/* Base styles live in the base layer. In Tailwind v4 utilities sit in a cascade
+   layer, and unlayered CSS beats layered CSS regardless of specificity — an
+   unlayered `* { margin: 0; padding: 0 }` reset here used to silently zero every
+   padding/margin utility in the app. Preflight already does that reset. */
+@layer base {
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #1a1a2e;
+    color: #e0e0e0;
+    overflow: hidden;
+    height: 100vh;
+  }
+
+  html[data-theme="light"] body {
+    background: #f1f5f9;
+    color: #1e293b;
+  }
+
+  #root {
+    width: 100%;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Tailwind v4 no longer applies a pointer cursor to buttons by default. */
+  button:not(:disabled) {
+    cursor: pointer;
+  }
 }
 
-body {
-  font-family: system-ui, -apple-system, sans-serif;
-  background: #1a1a2e;
-  color: #e0e0e0;
-  overflow: hidden;
-  height: 100vh;
-}
-
-html[data-theme="light"] body {
-  background: #f1f5f9;
-  color: #1e293b;
-}
-
-/* Pragmatic light-mode remap: components keep their dark-shade utility
-   classes; we just retint them under data-theme=light so the entire UI
-   inherits a sensible light palette without rewriting every classname.
+/* Pragmatic light-mode remap (deliberately unlayered so it overrides the
+   utilities): components keep their dark-shade utility classes and we retint
+   them under data-theme=light so the whole UI inherits a light palette.
    Notes:
    - text-white is intentionally NOT remapped — it's used as label color
      on colored backgrounds (active blue toolbar buttons etc.).
@@ -33,6 +45,16 @@ html[data-theme="light"] .bg-gray-900 { background-color: #ffffff; }
 html[data-theme="light"] .bg-gray-800 { background-color: #f1f5f9; }
 html[data-theme="light"] .bg-gray-800\/80 { background-color: #f1f5f9cc; }
 html[data-theme="light"] .bg-gray-800\/60 { background-color: #f1f5f999; }
+html[data-theme="light"] .bg-gray-800\/85 { background-color: #f1f5f9d9; }
+html[data-theme="light"] .bg-gray-800\/90 { background-color: #f1f5f9e6; }
+html[data-theme="light"] .bg-gray-900\/40 { background-color: #ffffff66; }
+html[data-theme="light"] .bg-gray-900\/70 { background-color: #ffffffb3; }
+html[data-theme="light"] .bg-gray-900\/75 { background-color: #ffffffbf; }
+html[data-theme="light"] .bg-gray-900\/80 { background-color: #ffffffcc; }
+html[data-theme="light"] .bg-gray-900\/90 { background-color: #ffffffe6; }
+html[data-theme="light"] .bg-gray-900\/95 { background-color: #fffffff2; }
+html[data-theme="light"] .bg-gray-950\/70 { background-color: #e2e8f0b3; }
+html[data-theme="light"] .bg-gray-950\/80 { background-color: #e2e8f0cc; }
 html[data-theme="light"] .bg-gray-700 { background-color: #e2e8f0; }
 html[data-theme="light"] .bg-gray-950 { background-color: #f8fafc; }
 
@@ -78,15 +100,3 @@ textarea:focus-visible {
 /* Native range/number/color inputs pick up the accent */
 input[type="color"] { padding: 0; }
 ::selection { background: rgba(34, 211, 238, 0.3); }
-
-#root {
-  width: 100%;
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-}
-
-/* Tailwind v4 no longer applies pointer cursor to buttons by default. */
-button:not(:disabled) {
-  cursor: pointer;
-}

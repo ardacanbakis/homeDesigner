@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useDesignStore, useTemporalStore, useActiveFloor } from '../store/design'
 import { exportJSON, importJSON } from '../persistence/storage'
 import { deriveRooms } from '../geometry/rooms'
 import { saveUserTemplate } from '../persistence/templates'
+import { planToSVG, downloadSVG, downloadPNG, printSVG } from '../persistence/planExport'
+import { shareUrl } from '../persistence/share'
 
 export function Toolbar() {
   const {
@@ -10,7 +12,7 @@ export function Toolbar() {
     snapEnabled, toggleSnap, undo, redo,
     activeFloorId, setActiveFloor, addFloor, deleteFloor,
     openWelcome, openTemplatePicker,
-    theme, toggleTheme, lastSavedAt, units, setUnits,
+    theme, toggleTheme, lastSavedAt, units, setUnits, showToast,
   } = useDesignStore()
   const floor = useActiveFloor()
   const { pastStates, futureStates } = useTemporalStore()
@@ -32,16 +34,39 @@ export function Toolbar() {
     return 'Saved'
   }, [now, lastSavedAt])
 
-  const handleExport = () => exportJSON(design)
   const handleImport = async () => {
     const d = await importJSON()
-    if (d) loadDesign(d)
+    if (d) { loadDesign(d); showToast('Design imported') }
   }
   const handleSaveAsTemplate = () => {
     const name = prompt('Save current design as a template — name:')
     if (!name || !name.trim()) return
     saveUserTemplate(name.trim(), design)
-    alert(`Saved "${name.trim()}" to My Templates.`)
+    showToast(`Saved "${name.trim()}" to My Templates`)
+  }
+  const handleShare = async () => {
+    try {
+      const url = await shareUrl(design)
+      try {
+        await navigator.clipboard.writeText(url)
+        showToast(url.length > 8000 ? 'Link copied — it’s long, some chat apps may truncate it' : 'Share link copied to clipboard')
+      } catch {
+        prompt('Copy this link to share your design:', url)
+      }
+    } catch {
+      showToast('Couldn’t create a share link in this browser')
+    }
+  }
+
+  /** Export the active floor as a plan image, print it, or download the design file. */
+  const handleExport = (kind: 'png' | 'svg' | 'print' | 'json') => {
+    if (kind === 'json') return exportJSON(design)
+    const date = new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+    const svg = planToSVG(floor, { units, title: floor.name || 'Floor plan', date })
+    const file = `homedesigner-${(floor.name || 'plan').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`
+    if (kind === 'svg') downloadSVG(svg, `${file}.svg`)
+    else if (kind === 'print') printSVG(svg, floor.name || 'Floor plan')
+    else downloadPNG(svg, `${file}.png`).catch(() => showToast('PNG export failed — try SVG instead'))
   }
 
   useEffect(() => {
@@ -113,11 +138,11 @@ export function Toolbar() {
         >
           {design.floors.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
         </select>
-        <button onClick={addFloor} title="Add floor" className={ghost + ' px-2'}>+</button>
+        <button onClick={addFloor} title="Add floor" aria-label="Add floor" className={ghost + ' px-2'}>+</button>
         <button
           onClick={() => { if (design.floors.length > 1 && confirm(`Delete "${floor.name}"?`)) deleteFloor(activeFloorId) }}
           disabled={design.floors.length <= 1}
-          title="Delete floor"
+          title="Delete floor" aria-label="Delete floor"
           className={ghost + ' px-2 hover:!text-red-400'}
         >🗑</button>
       </div>
@@ -126,8 +151,8 @@ export function Toolbar() {
 
       {/* Undo / Redo */}
       <div className="flex items-center">
-        <button onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)" className={ghost}>↩</button>
-        <button onClick={redo} disabled={!canRedo} title="Redo (Ctrl+Y)" className={ghost}>↪</button>
+        <button onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)" aria-label="Undo" className={ghost}>↩</button>
+        <button onClick={redo} disabled={!canRedo} title="Redo (Ctrl+Y)" aria-label="Redo" className={ghost}>↪</button>
       </div>
 
       <div className="flex-1" />
@@ -136,7 +161,7 @@ export function Toolbar() {
       <div className="flex items-center gap-1.5 text-[10px] text-gray-500 font-medium mr-1 select-none" title="Auto-saved to your browser">
         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_6px] shadow-emerald-500/50" />
         {savedLabel}
-        <span className="text-gray-600 light:text-gray-400 font-mono ml-1.5 tabular-nums">
+        <span className="hidden 2xl:inline text-gray-600 light:text-gray-400 font-mono ml-1.5 tabular-nums">
           {floor.walls.length}w·{floor.furniture.length}f{rooms.length > 0 && `·${rooms.length}r`}
         </span>
       </div>
@@ -152,13 +177,62 @@ export function Toolbar() {
 
       {/* File ops */}
       <div className="flex items-center gap-0.5">
-        <button onClick={openTemplatePicker} title="Browse templates" className={ghost + ' hover:!text-cyan-300'}>⊞ Templates</button>
-        <button onClick={handleSaveAsTemplate} title="Save current design as a template" className={ghost + ' hover:!text-cyan-300'}>⭐ Save</button>
-        <button onClick={handleExport} title="Export design as JSON" className={ghost}>↓ Export</button>
-        <button onClick={handleImport} title="Import a design JSON" className={ghost}>↑ Import</button>
+        <button onClick={openTemplatePicker} title="Browse templates" aria-label="Templates" className={ghost + ' hover:!text-cyan-300'}>⊞<span className="hidden min-[1400px]:inline"> Templates</span></button>
+        <button onClick={handleSaveAsTemplate} title="Save current design as a template" aria-label="Save as template" className={ghost + ' hover:!text-cyan-300'}>⭐<span className="hidden 2xl:inline"> Save</span></button>
+        <button onClick={handleShare} title="Copy a link that opens this design" aria-label="Share" className={ghost + ' hover:!text-cyan-300'}>🔗<span className="hidden min-[1400px]:inline"> Share</span></button>
+        <ExportMenu buttonClass={ghost} onPick={handleExport} />
+        <button onClick={handleImport} title="Import a design JSON" aria-label="Import" className={ghost}>↑<span className="hidden 2xl:inline"> Import</span></button>
         <button onClick={openWelcome} title="New design" className={ghost + ' hover:!text-red-400'}>New</button>
-        <button onClick={toggleTheme} title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} className={ghost + ' px-2'}>{theme === 'dark' ? '☀' : '🌙'}</button>
+        <button onClick={toggleTheme} title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} className={ghost + ' px-2'}>{theme === 'dark' ? '☀' : '🌙'}</button>
       </div>
+    </div>
+  )
+}
+
+const EXPORT_ITEMS = [
+  { kind: 'png', label: 'Floor plan (PNG)', hint: 'High-res image with dimensions' },
+  { kind: 'svg', label: 'Floor plan (SVG)', hint: 'Scalable vector for print or CAD' },
+  { kind: 'print', label: 'Print / Save as PDF…', hint: 'Opens the print dialog' },
+  { kind: 'json', label: 'Design file (.json)', hint: 'Re-import later with ↑ Import' },
+] as const
+
+/** "↓ Export ▾" dropdown. Closes on pick, outside click or Escape. */
+function ExportMenu({ buttonClass, onPick }: {
+  buttonClass: string
+  onPick: (kind: (typeof EXPORT_ITEMS)[number]['kind']) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const close = (e: MouseEvent | KeyboardEvent) => {
+      if (e instanceof KeyboardEvent ? e.key === 'Escape' : !ref.current?.contains(e.target as Node)) setOpen(false)
+    }
+    window.addEventListener('mousedown', close)
+    window.addEventListener('keydown', close)
+    return () => { window.removeEventListener('mousedown', close); window.removeEventListener('keydown', close) }
+  }, [open])
+
+  return (
+    <div ref={ref} className="relative">
+      <button onClick={() => setOpen(o => !o)} aria-haspopup="menu" aria-expanded={open} title="Export the plan or the design file" aria-label="Export" className={buttonClass}>
+        ↓<span className="hidden min-[1400px]:inline"> Export</span> <span className="text-[9px] opacity-70">▾</span>
+      </button>
+      {open && (
+        <div role="menu" className="absolute right-0 top-full mt-1.5 z-50 w-60 rounded-xl border border-gray-700 light:border-gray-200 bg-gray-900 light:bg-white shadow-xl shadow-black/40 p-1">
+          {EXPORT_ITEMS.map(item => (
+            <button
+              key={item.kind}
+              role="menuitem"
+              onClick={() => { setOpen(false); onPick(item.kind) }}
+              className="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-800 light:hover:bg-gray-100 transition-colors"
+            >
+              <div className="text-xs font-semibold text-gray-200 light:text-gray-800">{item.label}</div>
+              <div className="text-[10px] text-gray-500">{item.hint}</div>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

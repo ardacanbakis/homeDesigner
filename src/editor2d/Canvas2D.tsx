@@ -3,7 +3,7 @@ import { Stage, Layer, Line, Rect, Circle, Text, Group, Arrow, Transformer } fro
 import type Konva from 'konva'
 import { useDesignStore, useActiveFloor } from '../store/design'
 import { snapPoint, wallLength, wallAngle } from '../geometry/walls'
-import { deriveRooms, classifyRoom, roomColor } from '../geometry/rooms'
+import { deriveRooms, classifyRoom, roomColor, roomLabelPoint, doorSwingSide, doorSwingBoxes } from '../geometry/rooms'
 import { snapBoxToWalls, collidingIds } from '../geometry/snap'
 import { formatLength, formatArea, gridTiersFor, rotatedExtents, footprintAABB } from '../geometry/measure'
 import { CATALOG_MAP } from '../geometry/catalog'
@@ -24,6 +24,16 @@ function stagePosToCm(stageX: number, stageY: number, offset: Vec2, scale: numbe
     x: pxToCm(stageX - offset.x, scale),
     y: pxToCm(stageY - offset.y, scale),
   }
+}
+
+/** Dark or white label text, whichever reads better on a fill colour. */
+function readableOn(fill: string): string {
+  const m = /^#?([0-9a-f]{6})$/i.exec(fill.trim())
+  if (!m) return '#ffffff'
+  const n = parseInt(m[1], 16)
+  const lin = (c: number) => { const v = c / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4 }
+  const lum = 0.2126 * lin(n >> 16) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255)
+  return lum > 0.45 ? '#1e293b' : '#ffffff'
 }
 
 function cmToStagePos(cm: Vec2, offset: Vec2, scale: number): { x: number; y: number } {
@@ -107,6 +117,13 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
   // Derived rooms — recomputed only when walls change.
   const rooms = useMemo(() => deriveRooms(floor.walls), [floor.walls])
 
+  // Room labels sit in the clearest spot (away from furniture and door swings).
+  // The label box is a fixed size on screen, so its size in cm follows the zoom.
+  const roomLabelSpots = useMemo(() => {
+    const swings = doorSwingBoxes(floor.walls, floor.openings, rooms)
+    return new Map(rooms.map(r => [r.id, roomLabelPoint(r, floor.furniture, 120 / scale, 34 / scale, swings)]))
+  }, [rooms, floor.walls, floor.openings, floor.furniture, scale])
+
   /** Frame all walls + furniture on the active floor with padding. */
   const fitToView = useCallback(() => {
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
@@ -128,6 +145,15 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
     setScale(clamped)
     setOffset({ x: width / 2 - cx * clamped, y: height / 2 - cy * clamped })
   }, [floor, width, height])
+
+  // Frame the plan when the editor opens, when a design is loaded or replaced,
+  // and when switching floors — otherwise a freshly opened template sits
+  // off-centre until the user finds the Fit button. Plain edits never refit.
+  const viewEpoch = useDesignStore(s => s.viewEpoch)
+  const fitRef = useRef(fitToView)
+  useEffect(() => { fitRef.current = fitToView })
+  const sized = width > 0 && height > 0
+  useEffect(() => { if (sized) fitRef.current() }, [viewEpoch, activeFloorId, sized])
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -420,7 +446,7 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
               const sp = cmToStagePos(v, offset, scale)
               pts.push(sp.x, sp.y)
             }
-            const c = cmToStagePos(room.centroid, offset, scale)
+            const c = cmToStagePos(roomLabelSpots.get(room.id) ?? room.centroid, offset, scale)
             return (
               <Group key={room.id}>
                 <Line points={pts} closed fill={fill} opacity={0.10} />
@@ -528,6 +554,14 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
                     const opOffPx = cmToPx(op.offset, scale)
                     const opWPx = cmToPx(op.width, scale)
                     const isDoor = op.type === 'door'
+                    // Local −y is the wall's left-hand normal, so the swing side maps directly.
+                    const s = isDoor ? doorSwingSide(wall, op, floor.walls, rooms) : 1
+                    const hingeY = -s * wallT / 2
+                    const arc: number[] = []
+                    for (let i = 0; i <= 12; i++) {
+                      const th = (i / 12) * (Math.PI / 2)
+                      arc.push(opOffPx + opWPx * Math.sin(th), hingeY - s * opWPx * Math.cos(th))
+                    }
                     return (
                       <Group
                         key={op.id}
@@ -547,13 +581,23 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
                           strokeWidth={1}
                         />
                         {isDoor ? (
-                          /* Door: quarter-circle arc representing swing */
-                          <Line
-                            points={[opOffPx, -wallT / 2, opOffPx, -wallT / 2 - opWPx * 0.85]}
-                            stroke={opSeleted ? '#3b82f6' : '#64748b'}
-                            strokeWidth={1}
-                            listening={false}
-                          />
+                          /* Door: leaf drawn open + dashed swing arc, on the side it opens into */
+                          <>
+                            <Line
+                              points={[opOffPx, hingeY, opOffPx, hingeY - s * opWPx]}
+                              stroke={opSeleted ? '#3b82f6' : '#64748b'}
+                              strokeWidth={1.5}
+                              listening={false}
+                            />
+                            <Line
+                              points={arc}
+                              stroke={opSeleted ? '#3b82f6' : '#64748b'}
+                              strokeWidth={1}
+                              dash={[4, 3]}
+                              opacity={0.8}
+                              listening={false}
+                            />
+                          </>
                         ) : (
                           /* Window: three lines across gap */
                           [0.25, 0.5, 0.75].map(t => (
@@ -680,20 +724,30 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
                   dash={collisions.has(f.id) && !isPrimary && !isInMulti ? [6, 4] : undefined}
                   cornerRadius={3}
                 />
-                {scale > 0.6 && (
+                {scale > 0.6 && (() => {
+                  // Undo the nearest quarter turn so labels never read upside-down or
+                  // sideways; the text box still covers exactly the item's rect, so the
+                  // Transformer's bounds are unaffected.
+                  const quarter = ((Math.round((f.rotation * 2) / Math.PI) % 4) + 4) % 4
+                  const tw = quarter % 2 ? pd : pw, th = quarter % 2 ? pw : pd
+                  return (
                   <Text
-                    x={-pw / 2}
-                    y={-pd / 2}
-                    width={pw}
-                    height={pd}
+                    x={0}
+                    y={0}
+                    offsetX={tw / 2}
+                    offsetY={th / 2}
+                    width={tw}
+                    height={th}
+                    rotation={-quarter * 90}
                     text={`${cat.icon}\n${f.kind === 'custom' ? (f.customLabel || cat.label) : cat.label}`}
-                    fontSize={Math.max(9, Math.min(14, pw / 6))}
-                    fill="#fff"
+                    fontSize={Math.max(9, Math.min(14, tw / 6))}
+                    fill={readableOn(f.color ?? cat.color)}
                     align="center"
                     verticalAlign="middle"
                     listening={false}
                   />
-                )}
+                  )
+                })()}
               </Group>
             )
           })}

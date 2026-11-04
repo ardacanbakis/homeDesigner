@@ -1,7 +1,7 @@
 import { useDesignStore, useActiveFloor } from '../store/design'
 import { CATALOG_MAP } from '../geometry/catalog'
 import { wallLength } from '../geometry/walls'
-import { formatLength } from '../geometry/measure'
+import { formatLength, footprintAABB } from '../geometry/measure'
 import { LengthField } from './LengthField'
 
 const FURNITURE_COLORS = ['#8B7355', '#6B5B45', '#778899', '#2F2F2F', '#B0C4DE', '#4a7c59', '#3b6ea8', '#8b3a3a', '#f5f5f5']
@@ -172,8 +172,10 @@ export function Inspector() {
                   />
                 </div>
               )}
-              <Row label="X" value={formatLength(furniture.position.x, units)} />
-              <Row label="Y" value={formatLength(furniture.position.y, units)} />
+              {/* Where the item visibly sits (its footprint's top-left), which for a
+                  rotated piece differs from the stored, unrotated corner. */}
+              <Row label="X" value={formatLength(footprintAABB(furniture).x0, units)} />
+              <Row label="Y" value={formatLength(footprintAABB(furniture).y0, units)} />
               <div className="flex justify-between items-center text-xs py-0.5">
                 <span className="text-gray-500">Rotation</span>
                 <div className="flex items-center gap-1">

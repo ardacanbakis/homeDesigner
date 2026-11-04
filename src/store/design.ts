@@ -34,6 +34,10 @@ type State = {
   units: Units
   showWelcome: boolean
   showTemplatePicker: boolean
+  /** Short-lived confirmation message shown by <Toast/>. */
+  toast: { id: number; message: string } | null
+  /** Bumped whenever a whole design is loaded or replaced, so views can re-frame it. */
+  viewEpoch: number
 }
 
 type Actions = {
@@ -95,6 +99,7 @@ type Actions = {
   closeWelcome: () => void
   openTemplatePicker: () => void
   closeTemplatePicker: () => void
+  showToast: (message: string) => void
 }
 
 function emptyFloor(name: string): Floor {
@@ -184,6 +189,8 @@ const useDesignStoreBase = create<State & Actions>()(
         units: initialUnits(),
         showWelcome: isEmptyDesign(initial),
         showTemplatePicker: false,
+        toast: null as { id: number; message: string } | null,
+        viewEpoch: 0,
 
         setViewMode: m => set({ viewMode: m }),
         setActiveTool: t => set({ activeTool: t }),
@@ -465,13 +472,13 @@ const useDesignStoreBase = create<State & Actions>()(
         // ── Persistence ────────────────────────────────────────────────────
         loadDesign: design => {
           saveDesign(design)
-          set({ design, activeFloorId: design.floors[0].id, selectedId: null, showWelcome: false, showTemplatePicker: false })
+          set(s => ({ design, activeFloorId: design.floors[0].id, selectedId: null, selectedIds: [], showWelcome: false, showTemplatePicker: false, viewEpoch: s.viewEpoch + 1 }))
         },
 
         newDesign: () => {
           const design = emptyDesign()
           saveDesign(design)
-          set({ design, activeFloorId: design.floors[0].id, selectedId: null })
+          set(s => ({ design, activeFloorId: design.floors[0].id, selectedId: null, selectedIds: [], viewEpoch: s.viewEpoch + 1 }))
         },
 
         save: () => saveDesign(get().design),
@@ -480,6 +487,11 @@ const useDesignStoreBase = create<State & Actions>()(
         closeWelcome: () => set({ showWelcome: false }),
         openTemplatePicker: () => set({ showTemplatePicker: true }),
         closeTemplatePicker: () => set({ showTemplatePicker: false }),
+        showToast: message => {
+          const id = Date.now()
+          set({ toast: { id, message } })
+          setTimeout(() => { if (get().toast?.id === id) set({ toast: null }) }, 2600)
+        },
       }
     },
     {
