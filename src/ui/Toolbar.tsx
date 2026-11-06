@@ -74,8 +74,10 @@ export function Toolbar() {
       const tag = (e.target as HTMLElement).tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA') return
       const ctrl = e.ctrlKey || e.metaKey
-      if (ctrl && e.key === 'z') { e.preventDefault(); undo() }
-      if (ctrl && (e.key === 'y' || (e.shiftKey && e.key === 'z'))) { e.preventDefault(); redo() }
+      // With Shift held the key arrives as 'Z', so compare case-insensitively.
+      const key = e.key.toLowerCase()
+      if (ctrl && key === 'z' && !e.shiftKey) { e.preventDefault(); undo() }
+      else if (ctrl && (key === 'y' || (key === 'z' && e.shiftKey))) { e.preventDefault(); redo() }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)

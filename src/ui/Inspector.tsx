@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useDesignStore, useActiveFloor } from '../store/design'
-import { CATALOG_MAP, FLOOR_MATERIALS } from '../geometry/catalog'
+import { CATALOG_MAP, FLOOR_MATERIALS, WALL_PAINTS, customColor } from '../geometry/catalog'
 import { wallLength } from '../geometry/walls'
 import { formatLength, formatArea, footprintAABB } from '../geometry/measure'
 import { deriveRooms, roomAt, tagForRoom, classifyRoom, roomColor, pointInPolygon } from '../geometry/rooms'
 import type { FloorMaterial, Vec2 } from '../store/types'
 import { LengthField } from './LengthField'
+
+/** The 3D walls' own colour, shown on the "Default" paint swatch. */
+const WALL_DEFAULT = '#d4d8e0'
 
 const FURNITURE_COLORS = ['#8B7355', '#6B5B45', '#778899', '#2F2F2F', '#B0C4DE', '#4a7c59', '#3b6ea8', '#8b3a3a', '#f5f5f5']
 
@@ -242,22 +245,41 @@ export function Inspector() {
 
             <Section label="Color">
               <div className="flex items-center gap-1.5 flex-wrap">
-                {FURNITURE_COLORS.map(c => (
-                  <button
-                    key={c}
-                    onClick={() => updateFurnitureColor(furniture.id, c)}
-                    className={`w-6 h-6 rounded border-2 transition-all ${
-                      (furniture.color ?? '').toLowerCase() === c.toLowerCase() ? 'border-white scale-110' : 'border-transparent'
-                    }`}
-                    style={{ background: c }}
-                  />
-                ))}
-                <input
-                  type="color"
-                  value={furniture.color ?? '#888888'}
-                  onChange={e => updateFurnitureColor(furniture.id, e.target.value)}
+                {/* Default: the catalog colour in 2D and the model's own finish in 3D. */}
+                <button
+                  onClick={() => updateFurnitureColor(furniture.id, '')}
+                  title="Default colour"
+                  aria-label="Default colour"
+                  aria-pressed={!customColor(furniture)}
+                  className={`relative w-6 h-6 rounded border-2 overflow-hidden transition-all ${
+                    !customColor(furniture) ? 'border-white light:border-gray-800 scale-110' : 'border-transparent'
+                  }`}
+                  style={{ background: CATALOG_MAP[furniture.kind].color }}
+                >
+                  <span className="absolute inset-0 flex items-center justify-center text-[11px] font-bold text-white drop-shadow">↺</span>
+                </button>
+                {FURNITURE_COLORS.map(c => {
+                  const on = (customColor(furniture) ?? '').toLowerCase() === c.toLowerCase()
+                  return (
+                    <button
+                      key={c}
+                      onClick={() => updateFurnitureColor(furniture.id, c)}
+                      title={c}
+                      aria-label={`Colour ${c}`}
+                      aria-pressed={on}
+                      className={`w-6 h-6 rounded border-2 transition-all ${
+                        on ? 'border-white light:border-gray-800 scale-110' : 'border-transparent'
+                      }`}
+                      style={{ background: c }}
+                    />
+                  )
+                })}
+                <ColorInput
+                  value={furniture.color ?? CATALOG_MAP[furniture.kind].color}
+                  onPick={c => updateFurnitureColor(furniture.id, c)}
                   className="w-6 h-6 rounded cursor-pointer bg-transparent border-0"
-                  title="Custom color"
+                  title="Custom colour"
+                  aria-label="Custom colour"
                 />
               </div>
             </Section>
@@ -309,6 +331,8 @@ function RoomPanel({ at }: { at: Vec2 }) {
   const pieces = floor.furniture.filter(f =>
     pointInPolygon({ x: f.position.x + f.size.w / 2, y: f.position.y + f.size.d / 2 }, room.vertices)).length
   const current = tag?.material ?? null
+  // A paint picked with the colour picker rather than from the palette.
+  const customPaint = tag?.paint && !WALL_PAINTS.some(p => p.color.toLowerCase() === tag.paint!.toLowerCase()) ? tag.paint : undefined
   const swatches: { id: FloorMaterial | null; label: string; color: string }[] = [
     { id: null, label: 'Auto', color: roomColor(room.id) },
     ...(Object.entries(FLOOR_MATERIALS) as [FloorMaterial, (typeof FLOOR_MATERIALS)[FloorMaterial]][])
@@ -349,9 +373,54 @@ function RoomPanel({ at }: { at: Vec2 }) {
         </div>
       </Section>
 
+      <Section label="Wall paint">
+        <div className="grid grid-cols-3 gap-1">
+          {[{ label: 'Default', color: null as string | null }, ...WALL_PAINTS].map(p => {
+            const on = (tag?.paint ?? null)?.toLowerCase() === p.color?.toLowerCase()
+            return (
+              <button
+                key={p.label}
+                onClick={() => setRoomTag(at, { paint: p.color })}
+                aria-pressed={on}
+                title={p.color ? `${p.label} (${p.color})` : 'Plain walls'}
+                className={`flex flex-col items-center gap-1 py-1.5 rounded-lg border text-[10px] leading-tight transition-colors ${
+                  on
+                    ? 'border-cyan-400 bg-cyan-500/10 text-cyan-200 light:text-cyan-700'
+                    : 'border-gray-700 bg-gray-800/60 text-gray-400 hover:border-gray-500 hover:text-gray-200'
+                }`}
+              >
+                <span className="w-6 h-4 rounded-sm border border-black/20" style={{ background: p.color ?? WALL_DEFAULT }} />
+                {p.label}
+              </button>
+            )
+          })}
+          {/* Any other colour */}
+          <label
+            title="Pick any colour"
+            className={`relative flex flex-col items-center gap-1 py-1.5 rounded-lg border text-[10px] cursor-pointer transition-colors ${
+              customPaint
+                ? 'border-cyan-400 bg-cyan-500/10 text-cyan-200 light:text-cyan-700'
+                : 'border-gray-700 bg-gray-800/60 text-gray-400 hover:border-gray-500 hover:text-gray-200'
+            }`}
+          >
+            <span
+              className="w-6 h-4 rounded-sm border border-black/20"
+              style={{ background: customPaint ?? 'conic-gradient(#f87171, #fbbf24, #4ade80, #60a5fa, #c084fc, #f87171)' }}
+            />
+            Custom
+            <ColorInput
+              aria-label="Custom wall paint"
+              value={tag?.paint ?? '#f1ece2'}
+              onPick={c => setRoomTag(at, { paint: c })}
+              className="absolute inset-0 opacity-0 cursor-pointer"
+            />
+          </label>
+        </div>
+      </Section>
+
       {tag && (
         <button
-          onClick={() => setRoomTag(at, { name: '', material: null })}
+          onClick={() => setRoomTag(at, { name: '', material: null, paint: null })}
           className="w-full px-2 py-1.5 text-xs bg-gray-800 text-gray-300 hover:bg-gray-700 rounded border border-gray-600"
         >
           Reset to automatic
@@ -400,6 +469,21 @@ function RoomNameField({ value, placeholder, onCommit }: { value: string; placeh
       className="w-full bg-gray-800 text-gray-100 text-sm font-semibold px-2 py-1.5 rounded-lg border border-gray-600 focus:outline-none focus:border-cyan-500 placeholder:text-gray-500 placeholder:font-normal"
     />
   )
+}
+
+/** A colour input that commits once, when the picker closes. React's onChange
+ *  fires on every drag step, which flooded the undo history. */
+function ColorInput({ value, onPick, ...rest }: { value: string; onPick: (c: string) => void } & Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'type'>) {
+  const ref = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const commit = () => { if (el.value.toLowerCase() !== value.toLowerCase()) onPick(el.value) }
+    el.addEventListener('change', commit)
+    return () => el.removeEventListener('change', commit)
+  }, [value, onPick])
+  // Keyed on the value so an outside change (undo, another swatch) resets it.
+  return <input key={value} ref={ref} type="color" defaultValue={value} {...rest} />
 }
 
 function Section({ label, children }: { label: string; children: React.ReactNode }) {

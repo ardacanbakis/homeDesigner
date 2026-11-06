@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { snapBoxToWalls, footprintsOverlap, collidingIds } from './snap'
+import { customColor } from './catalog'
 import type { Wall, Furniture } from '../store/types'
 
 const wallV: Wall = { id: 'v', a: { x: 200, y: 0 }, b: { x: 200, y: 300 }, thickness: 10, height: 260 }
@@ -65,5 +66,16 @@ describe('rugs', () => {
     const rug: Furniture = { ...furn(0, 0, 200, 140), id: 'rug', kind: 'rug' }
     expect(footprintsOverlap(rug, furn(50, 50))).toBe(false)
     expect(collidingIds([rug, furn(50, 50), furn(400, 400)]).size).toBe(0)
+  })
+})
+
+describe('customColor', () => {
+  it('treats the catalog colour as no custom colour', () => {
+    expect(customColor({ kind: 'sofa', color: '#778899' })).toBeUndefined()
+    expect(customColor({ kind: 'sofa', color: '#778899'.toUpperCase() })).toBeUndefined()
+    expect(customColor({ kind: 'sofa' })).toBeUndefined()
+    expect(customColor({ kind: 'sofa', color: '#8b3a3a' })).toBe('#8b3a3a')
+    // Custom objects only have their own colour.
+    expect(customColor({ kind: 'custom', color: '#64748b' })).toBe('#64748b')
   })
 })

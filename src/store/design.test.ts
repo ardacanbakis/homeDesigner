@@ -280,9 +280,39 @@ describe('design store — rooms', () => {
     expect(tags()[0]).toMatchObject({ name: 'Den', material: 'tile' })
   })
 
+  it('paints a room, rejecting anything but #rrggbb, and resets it with null', () => {
+    box()
+    store.getState().setRoomTag({ x: 100, y: 100 }, { paint: '#B3C1A4' })
+    expect(tags()[0].paint).toBe('#B3C1A4')
+    store.getState().setRoomTag({ x: 100, y: 100 }, { paint: 'red' })
+    expect(tags()).toHaveLength(0)
+    store.getState().setRoomTag({ x: 100, y: 100 }, { name: 'Den', paint: '#123456' })
+    store.getState().setRoomTag({ x: 100, y: 100 }, { paint: null })
+    expect(tags()[0]).toEqual({ id: expect.any(String), at: { x: 100, y: 100 }, name: 'Den' })
+  })
+
   it('ignores points outside any room', () => {
     box()
     store.getState().setRoomTag({ x: 900, y: 900 }, { name: 'Nowhere' })
     expect(tags()).toHaveLength(0)
+  })
+})
+
+describe('design store — furniture colour', () => {
+  it('sets a colour and resets it to the default with an empty string', () => {
+    store.getState().addFurniture('sofa', { x: 0, y: 0 })
+    const id = store.getState().design.floors[0].furniture[0].id
+    store.getState().updateFurnitureColor(id, '#3b6ea8')
+    expect(store.getState().design.floors[0].furniture[0].color).toBe('#3b6ea8')
+    store.getState().updateFurnitureColor(id, '')
+    expect('color' in store.getState().design.floors[0].furniture[0]).toBe(false)
+  })
+})
+
+describe('design store — wall view', () => {
+  it('remembers the 3D wall view', () => {
+    store.getState().setWallView('low')
+    expect(store.getState().wallView).toBe('low')
+    expect(localStorage.getItem('hd-walls')).toBe('low')
   })
 })

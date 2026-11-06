@@ -63,6 +63,8 @@ function compact(design: Design): Design {
 
 const finite = (...ns: unknown[]) => ns.every(n => typeof n === 'number' && Number.isFinite(n))
 
+const isHexColor = (c: unknown): c is string => typeof c === 'string' && /^#[0-9a-f]{6}$/i.test(c)
+
 function sanitizeTags(tags: RoomTag[]): RoomTag[] {
   const out: RoomTag[] = []
   for (const t of tags) {
@@ -70,7 +72,8 @@ function sanitizeTags(tags: RoomTag[]): RoomTag[] {
     const tag: RoomTag = { id: String(t.id), at: { x: t.at.x, y: t.at.y } }
     if (typeof t.name === 'string' && t.name.trim()) tag.name = t.name.slice(0, 40)
     if (typeof t.material === 'string' && t.material in FLOOR_MATERIALS) tag.material = t.material
-    if (tag.name || tag.material) out.push(tag)
+    if (isHexColor(t.paint)) tag.paint = t.paint
+    if (tag.name || tag.material || tag.paint) out.push(tag)
   }
   return out
 }
@@ -91,7 +94,12 @@ function sanitize(design: Design): Design | null {
         && finite(o.offset, o.width, o.height, o.sillHeight)),
       furniture: f.furniture.filter(x => x && x.kind in CATALOG_MAP && x.position && x.size
         && finite(x.position.x, x.position.y, x.rotation, x.size.w, x.size.d, x.size.h))
-        .map(x => (x.customLabel !== undefined ? { ...x, customLabel: String(x.customLabel).slice(0, 32) } : x)),
+        .map(x => {
+          const out = { ...x }
+          if (out.customLabel !== undefined) out.customLabel = String(out.customLabel).slice(0, 32)
+          if (out.color !== undefined && !isHexColor(out.color)) delete out.color
+          return out
+        }),
       ...(Array.isArray(f.roomTags) ? { roomTags: sanitizeTags(f.roomTags) } : {}),
     })
   }

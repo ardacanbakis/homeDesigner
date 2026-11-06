@@ -7,9 +7,12 @@ import { Walls3D } from './Walls3D'
 import { Furniture3D } from './Furniture3D'
 import { Rooms3D } from './Rooms3D'
 import { designBounds, m } from './units'
-import type { Design, CameraMode } from '../store/types'
+import type { Design, CameraMode, WallView } from '../store/types'
 
 type ControlsLike = { target: THREE.Vector3; update: () => void }
+
+/** Camera distance per metre of plan size for the angled (orbit / iso) views. */
+const ORBIT_DIST = 1.05
 
 /** WASD + space/shift movement. Only active in 'walk' camera mode.
  *  Uses the camera's forward/right vectors so it walks in look direction. */
@@ -93,7 +96,7 @@ function useFrameDesign() {
         radius = Math.max(width, depth, height, 2)
       }
 
-      const dist = radius * 1.45 + 1.5
+      const dist = radius * ORBIT_DIST + 1.5
       camera.position.set(center.x + dist * 0.8, center.y + dist * 0.9, center.z + dist)
       camera.near = 0.1
       camera.far = dist * 20
@@ -122,10 +125,11 @@ function applyPreset(mode: CameraMode, camera: THREE.Camera, controls: ControlsL
   const dist = radius * 1.45 + 1.5
   const target = new THREE.Vector3(cx, Math.min(height / 2, 1.5), cz)
 
+  // With the walls cut away the interior is the point, so the angled views sit closer.
+  const near = radius * ORBIT_DIST + 1.5
   if (mode === 'top') camera.position.set(cx, dist * 1.4, cz + 0.001) // tiny offset so lookAt doesn't degenerate
   else if (mode === 'front') camera.position.set(cx, height / 2 + 0.5, cz + dist)
-  else if (mode === 'iso') camera.position.set(cx + dist * 0.8, dist * 0.9, cz + dist)
-  else camera.position.set(cx + dist * 0.8, dist * 0.9, cz + dist) // orbit default
+  else camera.position.set(cx + near * 0.8, near * 0.9, cz + near) // iso and orbit
   camera.lookAt(target)
   if (controls) { controls.target.copy(target); controls.update() }
 }
@@ -135,6 +139,7 @@ function SceneContent({ onShotReady }: { onShotReady: (fn: () => void) => void }
   const activeFloorId = useDesignStore(s => s.activeFloorId)
   const cameraMode = useDesignStore(s => s.cameraMode)
   const isolate = useDesignStore(s => s.isolateActiveFloor)
+  const wallView = useDesignStore(s => s.wallView)
   const setSelected = useDesignStore(s => s.setSelected)
   const camera = useThree(s => s.camera)
   const controls = useThree(s => s.controls) as ControlsLike | null
@@ -142,6 +147,7 @@ function SceneContent({ onShotReady }: { onShotReady: (fn: () => void) => void }
   const scene = useThree(s => s.scene)
   const frame = useFrameDesign()
   const elevations = floorElevations(design.floors)
+  const activeIndex = design.floors.findIndex(f => f.id === activeFloorId)
 
   // Re-frame on first mount and whenever the geometry meaningfully changes — but
   // only in orbit mode. The presets manage their own placement; walk mode is
@@ -277,10 +283,13 @@ function SceneContent({ onShotReady }: { onShotReady: (fn: () => void) => void }
         const interactive = floor.id === activeFloorId
         // When isolation is on, skip rendering inactive floors entirely.
         if (isolate && !interactive) return null
+        // Cutting away walls is about looking into the active floor, so the
+        // floors stacked on top of it are lifted off, like a doll's house.
+        if (wallView !== 'full' && cameraMode !== 'walk' && i > activeIndex) return null
         return (
           <group key={floor.id}>
             <Rooms3D walls={floor.walls} tags={floor.roomTags} elevation={elevations[i]} showTints={interactive} />
-            <Walls3D walls={floor.walls} openings={floor.openings} elevation={elevations[i]} interactive={interactive} />
+            <Walls3D walls={floor.walls} openings={floor.openings} tags={floor.roomTags} elevation={elevations[i]} interactive={interactive} />
             <Furniture3D furniture={floor.furniture} elevation={elevations[i]} interactive={interactive} />
           </group>
         )
@@ -294,6 +303,8 @@ export function Scene3D() {
   const setCameraMode = useDesignStore(s => s.setCameraMode)
   const isolate = useDesignStore(s => s.isolateActiveFloor)
   const toggleFloorIsolation = useDesignStore(s => s.toggleFloorIsolation)
+  const wallView = useDesignStore(s => s.wallView)
+  const setWallView = useDesignStore(s => s.setWallView)
   // Capture a screenshot callback that SceneContent populates.
   const shotRef = useRef<() => void>(() => {})
   const onShotReady = useCallback((fn: () => void) => { shotRef.current = fn }, [])
@@ -308,9 +319,28 @@ export function Scene3D() {
     >{label}</button>
   )
 
+  const wallBtn = (v: WallView, label: string, title: string) => (
+    <button
+      onClick={() => setWallView(v)}
+      title={title}
+      aria-pressed={wallView === v}
+      disabled={cameraMode === 'walk'}
+      className={`px-2.5 py-1 text-[11px] font-medium transition-colors disabled:cursor-not-allowed ${
+        wallView === v ? 'bg-cyan-500 text-white' : 'bg-gray-800/85 text-gray-300 hover:bg-gray-700 disabled:hover:bg-gray-800/85'
+      }`}
+    >{label}</button>
+  )
+
   return (
     <div className="absolute inset-0 bg-[#aab2c0] light:bg-[#e2e8f0]">
-      <Canvas shadows camera={{ position: [6, 6, 8], fov: 50 }} dpr={[1, 2]} gl={{ preserveDrawingBuffer: true }}>
+      <Canvas
+        shadows
+        camera={{ position: [6, 6, 8], fov: 50 }}
+        dpr={[1, 2]}
+        gl={{ preserveDrawingBuffer: true }}
+        // Per-material clipping planes drive the wall cutaway.
+        onCreated={({ gl }) => { gl.localClippingEnabled = true }}
+      >
         <Suspense fallback={null}>
           <SceneContent onShotReady={onShotReady} />
         </Suspense>
@@ -323,6 +353,19 @@ export function Scene3D() {
         {modeBtn('top',   '⬇ Top',    'Top-down view')}
         {modeBtn('front', '▭ Front',  'Front elevation')}
         {modeBtn('iso',   '◆ Iso',    'Isometric view')}
+      </div>
+
+      {/* HUD left: how walls show. Walk mode always uses full-height walls. */}
+      <div
+        role="group"
+        aria-label="Walls"
+        title={cameraMode === 'walk' ? 'Walls are always full height in Walk mode' : undefined}
+        className={`absolute top-3 left-3 flex items-stretch rounded-lg overflow-hidden border border-gray-700/60 shadow-lg ${cameraMode === 'walk' ? 'opacity-50' : ''}`}
+      >
+        <span className="flex items-center px-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400 bg-gray-900/85">Walls</span>
+        {wallBtn('full', 'Full', 'Walls at full height')}
+        {wallBtn('cutaway', 'Cutaway', 'Lower the walls between you and the rooms, like a doll’s house')}
+        {wallBtn('low', 'Low', 'Lower every wall')}
       </div>
 
       {/* HUD right: floor isolation + PNG export */}

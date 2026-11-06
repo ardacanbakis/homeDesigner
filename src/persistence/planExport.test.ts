@@ -79,4 +79,11 @@ describe('planToSVG — room tags', () => {
     expect(svg).toContain('Den &amp; &quot;Library&quot;')
     expect(svg).toContain('fill="#B08A5E" fill-opacity="0.38"')
   })
+
+  it('draws a band of wall paint inside painted rooms only', () => {
+    const floor = tFloor()
+    floor.roomTags = [{ id: 't', at: { x: 300, y: 270 }, paint: '#B3C1A4' }]
+    const svg = planToSVG(floor, { units: 'cm', title: 'Plan' })
+    expect(svg.match(/stroke="#B3C1A4"/g)).toHaveLength(1)
+  })
 })

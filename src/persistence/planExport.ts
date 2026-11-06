@@ -1,6 +1,6 @@
 import type { Floor, Units } from '../store/types'
 import { CATALOG_MAP, FLOOR_MATERIALS, isFlat } from '../geometry/catalog'
-import { deriveRooms, roomHue, roomLabelPoint, pointInPolygon, doorSwingSide, doorSwingBoxes, tagForRoom, roomName } from '../geometry/rooms'
+import { deriveRooms, roomHue, roomLabelPoint, pointInPolygon, doorSwingSide, doorSwingBoxes, tagForRoom, roomName, insetPolygon } from '../geometry/rooms'
 import { wallLength } from '../geometry/walls'
 import { formatLength, formatArea, footprintAABB, CM_PER_FOOT } from '../geometry/measure'
 
@@ -57,12 +57,18 @@ export function planToSVG(floor: Floor, opts: { units: Units; title: string; dat
   // ── Rooms ──────────────────────────────────────────────────────────────────
   const rooms = deriveRooms(floor.walls)
   const tags = new Map(rooms.map(r => [r.id, tagForRoom(r, rooms, floor.roomTags)]))
+  const wallHalf = Math.max(0, ...floor.walls.map(w => w.thickness)) / 2
   for (const r of rooms) {
     const material = tags.get(r.id)?.material
     const fill = material
       ? `fill="${FLOOR_MATERIALS[material].color}" fill-opacity="0.38"`
       : `fill="${hslHex(roomHue(r.id), 0.55, 0.62)}" fill-opacity="0.18"`
     out.push(`<polygon points="${pts(r.vertices)}" ${fill}/>`)
+    // Wall paint: a band along the inside of the walls, as in the editor.
+    const paint = tags.get(r.id)?.paint
+    if (paint && /^#[0-9a-f]{6}$/i.test(paint)) {
+      out.push(`<polygon points="${pts(insetPolygon(r.vertices, wallHalf + 3))}" fill="none" stroke="${paint}" stroke-width="6" stroke-linejoin="miter"/>`)
+    }
   }
 
   // ── Furniture (under walls, labels upright; rugs beneath everything) ───────

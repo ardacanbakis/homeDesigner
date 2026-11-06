@@ -80,7 +80,7 @@ function oneBed(): Design {
   p.corner('toilet', bath, 'SE', { w: 40, d: 65 })
   p.place('sink', bath, 'S', { w: 55, d: 42, align: 0.6 })
   p.room(B(0, 0, 400, 440), { material: 'wood' })
-  p.room(bedroom, { material: 'carpet' })
+  p.room(bedroom, { material: 'carpet', paint: '#B3C1A4' })
   p.room(bath, { material: 'tile' })
   return p.toDesign('1-Bedroom Apartment')
 }
@@ -134,9 +134,9 @@ function twoBed(): Design {
   p.place('bookshelf', office, 'W', { align: 0.5 })
   p.room(living, { material: 'wood' })
   p.room(kitchen, { material: 'tile' })
-  p.room(bedroom, { material: 'wood' })
+  p.room(bedroom, { material: 'wood', paint: '#AEC0CE' })
   p.room(bath, { material: 'marble' })
-  p.room(office, { material: 'wood' })
+  p.room(office, { material: 'wood', paint: '#D5CBBE' })
   return p.toDesign('2-Bedroom Apartment')
 }
 
@@ -184,8 +184,8 @@ function familyHouse(): Design {
   p.lengthwise('bathtub', bath, 'S', { w: 80, d: 170 })
   p.at('shower', 619, 475, { w: 90, d: 90, back: 'W' })
   p.room(B(0, 0, 840, 340), { material: 'wood' })
-  p.room(B(0, 340, 300, 640), { name: 'Main Bedroom', material: 'wood' })
-  p.room(bed2, { name: 'Bedroom 2', material: 'carpet' })
+  p.room(B(0, 340, 300, 640), { name: 'Main Bedroom', material: 'wood', paint: '#B3C1A4' })
+  p.room(bed2, { name: 'Bedroom 2', material: 'carpet', paint: '#E4C3BC' })
   p.room(bath, { material: 'marble' })
   return p.toDesign('Family House')
 }
@@ -223,7 +223,7 @@ function officeSuite(): Design {
   p.corner('toilet', wc, 'NW', { w: 40, d: 68 })
   p.corner('sink', wc, 'SW', { w: 55, d: 42, back: 'W' })
   p.room(B(0, 0, 760, 520), { name: 'Open Office', material: 'concrete', at: { x: 380, y: 300 } })
-  p.room(B(520, 0, 760, 260), { material: 'carpet' })
+  p.room(B(520, 0, 760, 260), { material: 'carpet', paint: '#AEC0CE' })
   p.room(wc, { name: 'Restroom', material: 'tile' })
   return p.toDesign('Office Suite')
 }

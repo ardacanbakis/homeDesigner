@@ -116,6 +116,8 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
 
   // Derived rooms — recomputed only when walls change.
   const rooms = useMemo(() => deriveRooms(floor.walls), [floor.walls])
+  // Room outlines follow wall centrelines; this gets drawings clear of the walls.
+  const wallHalf = useMemo(() => Math.max(0, ...floor.walls.map(w => w.thickness)) / 2, [floor.walls])
 
   // Room labels sit in the clearest spot (away from furniture and door swings).
   // The label box is a fixed size on screen, so its size in cm follows the zoom.
@@ -472,10 +474,17 @@ export function Canvas2D({ width, height }: { width: number; height: number }) {
             return (
               <Group key={room.id}>
                 <Line points={pts} closed fill={fill.color} opacity={fill.material ? (dark ? 0.3 : 0.45) : isSel ? 0.18 : 0.10} />
-                {isSel && (
-                  // Drawn just inside the walls (polygons follow wall centrelines).
+                {tag?.paint && (
+                  // Wall paint: a band of the colour along the inside of the walls.
                   <Line
-                    points={insetPolygon(room.vertices, 12).flatMap(v => { const sp = cmToStagePos(v, offset, scale); return [sp.x, sp.y] })}
+                    points={insetPolygon(room.vertices, wallHalf + 3).flatMap(v => { const sp = cmToStagePos(v, offset, scale); return [sp.x, sp.y] })}
+                    closed stroke={tag.paint} strokeWidth={Math.max(2, cmToPx(6, scale))} opacity={0.95}
+                  />
+                )}
+                {isSel && (
+                  // Drawn just inside the walls (and any paint band).
+                  <Line
+                    points={insetPolygon(room.vertices, wallHalf + (tag?.paint ? 12 : 5)).flatMap(v => { const sp = cmToStagePos(v, offset, scale); return [sp.x, sp.y] })}
                     closed stroke="#22d3ee" strokeWidth={2} dash={[8, 5]} opacity={0.9}
                   />
                 )}

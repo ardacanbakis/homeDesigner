@@ -1,4 +1,4 @@
-import type { FurnitureKind, FloorMaterial } from '../store/types'
+import type { Furniture, FurnitureKind, FloorMaterial } from '../store/types'
 
 export type FurnitureCategory = 'bedroom' | 'kitchen' | 'living' | 'bathroom' | 'office' | 'decor' | 'structure' | 'custom'
 
@@ -52,6 +52,24 @@ export const CATALOG_MAP = Object.fromEntries(CATALOG.map(e => [e.kind, e])) as 
 export function isFlat(kind: FurnitureKind): boolean {
   return kind === 'rug'
 }
+
+/** The colour the user picked for a piece, or undefined when it still has its
+ *  catalog default (new pieces and templates store that default explicitly). */
+export function customColor(f: Pick<Furniture, 'kind' | 'color'>): string | undefined {
+  if (!f.color || f.kind === 'custom') return f.color
+  return f.color.toLowerCase() === CATALOG_MAP[f.kind].color.toLowerCase() ? undefined : f.color
+}
+
+/** Wall paints offered for rooms (any #rrggbb colour is allowed). */
+export const WALL_PAINTS: { label: string; color: string }[] = [
+  { label: 'Warm white', color: '#F1ECE2' },
+  { label: 'Greige',     color: '#D5CBBE' },
+  { label: 'Sage',       color: '#B3C1A4' },
+  { label: 'Mist blue',  color: '#AEC0CE' },
+  { label: 'Blush',      color: '#E4C3BC' },
+  { label: 'Terracotta', color: '#C98A6C' },
+  { label: 'Navy',       color: '#45546C' },
+]
 
 /** Floor finishes a room can be given, with their plan/3D colour. */
 export const FLOOR_MATERIALS: Record<FloorMaterial, { label: string; color: string; roughness: number }> = {

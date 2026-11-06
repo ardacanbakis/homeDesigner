@@ -36,12 +36,13 @@ export class Plan {
   furniture: Furniture[] = []
   roomTags: RoomTag[] = []
 
-  /** Name a room and/or give it a floor finish. Anchored at the box centre
-   *  unless `at` is given (for rooms whose centre lies outside them). */
-  room(box: Box, o: { name?: string; material?: FloorMaterial; at?: { x: number; y: number } }) {
+  /** Name a room and/or give it a floor finish and wall paint. Anchored at the
+   *  box centre unless `at` is given (for rooms whose centre lies outside them). */
+  room(box: Box, o: { name?: string; material?: FloorMaterial; paint?: string; at?: { x: number; y: number } }) {
     const tag: RoomTag = { id: nanoid(), at: o.at ?? { x: (box.x0 + box.x1) / 2, y: (box.y0 + box.y1) / 2 } }
     if (o.name) tag.name = o.name
     if (o.material) tag.material = o.material
+    if (o.paint) tag.paint = o.paint
     this.roomTags.push(tag)
   }
 

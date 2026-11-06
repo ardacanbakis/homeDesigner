@@ -44,12 +44,24 @@ describe('share links', () => {
       { id: 'a', at: { x: 100, y: 100 }, name: 'Den', material: 'wood' },
       { id: 'b', at: { x: 50, y: 50 }, material: 'lava' as never },
       { id: 'c', at: { x: NaN, y: 0 }, name: 'Bad' },
+      { id: 'd', at: { x: 300, y: 300 }, paint: '#B3C1A4' },
+      { id: 'e', at: { x: 60, y: 60 }, paint: 'red"/><script>' },
     ]
     const decoded = await decodeDesign(await encodeDesign(d))
     const tags = decoded!.floors[0].roomTags!
-    expect(tags).toHaveLength(1)
+    expect(tags).toHaveLength(2)
     expect(tags[0]).toMatchObject({ at: { x: 100, y: 100 }, name: 'Den', material: 'wood' })
+    expect(tags[1]).toEqual({ id: expect.any(String), at: { x: 300, y: 300 }, paint: '#B3C1A4' })
     expect(tags[0].id).not.toBe('a')
+  })
+
+  it('keeps hex furniture colours and drops anything else', async () => {
+    const d = TEMPLATES[0].build()
+    d.floors[0].furniture[0].color = '#3B6EA8'
+    d.floors[0].furniture[1].color = 'url(javascript:alert(1))'
+    const decoded = await decodeDesign(await encodeDesign(d))
+    expect(decoded!.floors[0].furniture[0].color).toBe('#3B6EA8')
+    expect(decoded!.floors[0].furniture[1].color).toBeUndefined()
   })
 
   it('drops malformed items instead of crashing', async () => {

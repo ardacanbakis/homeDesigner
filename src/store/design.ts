@@ -7,7 +7,7 @@ import { saveDesign, loadDesign, CURRENT_VERSION } from '../persistence/storage'
 import { wallLength } from '../geometry/walls'
 import { snapStepFor } from '../geometry/measure'
 import { deriveRooms, roomAt } from '../geometry/rooms'
-import type { Wall, Opening, Furniture, FurnitureKind, Vec2, Design, Floor, ViewMode, ActiveTool, CameraMode, Units, RoomTag, FloorMaterial } from './types'
+import type { Wall, Opening, Furniture, FurnitureKind, Vec2, Design, Floor, ViewMode, ActiveTool, CameraMode, Units, RoomTag, FloorMaterial, WallView } from './types'
 
 type State = {
   design: Design
@@ -17,6 +17,8 @@ type State = {
   cameraMode: CameraMode
   /** Hide non-active floors in 3D when true. */
   isolateActiveFloor: boolean
+  /** How walls show in 3D (remembered across sessions). */
+  wallView: WallView
   theme: 'dark' | 'light'
   /** Epoch ms of the most recent persisted save. */
   lastSavedAt: number
@@ -51,6 +53,7 @@ type Actions = {
   setActiveTool: (t: ActiveTool) => void
   setCameraMode: (m: CameraMode) => void
   toggleFloorIsolation: () => void
+  setWallView: (v: WallView) => void
   setTheme: (t: 'dark' | 'light') => void
   toggleTheme: () => void
   setUnits: (u: Units) => void
@@ -61,9 +64,9 @@ type Actions = {
   toggleSelected: (id: string) => void
   selectRoom: (at: Vec2 | null, opts?: { rename?: boolean }) => void
   clearRenameRoom: () => void
-  /** Rename / re-floor the room containing `at`. An empty name or a null
-   *  material resets that property to automatic. */
-  setRoomTag: (at: Vec2, patch: { name?: string; material?: FloorMaterial | null }) => void
+  /** Rename / re-floor / repaint the room containing `at`. An empty name or a
+   *  null material or paint resets that property to automatic. */
+  setRoomTag: (at: Vec2, patch: { name?: string; material?: FloorMaterial | null; paint?: string | null }) => void
   copySelection: () => void
   pasteClipboard: () => void
   setDragKind: (k: FurnitureKind | null) => void
@@ -98,6 +101,7 @@ type Actions = {
   deleteFurniture: (id: string) => void
   updateFurnitureSize: (id: string, size: Partial<{ w: number; d: number; h: number }>) => void
   updateFurnitureLabel: (id: string, label: string) => void
+  /** Set a piece's colour; an empty string resets it to the default. */
   updateFurnitureColor: (id: string, color: string) => void
   /** Apply a move/resize/rotate in one commit, so it is a single undo step. */
   transformFurniture: (id: string, patch: Partial<Pick<Furniture, 'position' | 'size' | 'rotation'>>) => void
@@ -163,6 +167,15 @@ function initialViewMode(): ViewMode {
   return '2d'
 }
 
+const WALLS_KEY = 'hd-walls'
+function initialWallView(): WallView {
+  try {
+    const saved = localStorage.getItem(WALLS_KEY)
+    if (saved === 'full' || saved === 'cutaway' || saved === 'low') return saved
+  } catch { /* ignore */ }
+  return 'cutaway'
+}
+
 const UNITS_KEY = 'hd-units'
 function initialUnits(): Units {
   try {
@@ -201,6 +214,7 @@ const useDesignStoreBase = create<State & Actions>()(
         activeTool: 'select' as ActiveTool,
         cameraMode: 'orbit' as CameraMode,
         isolateActiveFloor: false,
+        wallView: initialWallView(),
         theme: initialTheme(),
         lastSavedAt: Date.now(),
         selectedId: null as string | null,
@@ -221,6 +235,7 @@ const useDesignStoreBase = create<State & Actions>()(
         setActiveTool: t => set({ activeTool: t }),
         setCameraMode: m => set({ cameraMode: m }),
         toggleFloorIsolation: () => set(s => ({ isolateActiveFloor: !s.isolateActiveFloor })),
+        setWallView: v => { try { localStorage.setItem(WALLS_KEY, v) } catch { /* ignore */ }; set({ wallView: v }) },
         setTheme: t => { try { localStorage.setItem(THEME_KEY, t) } catch { /* ignore */ }; set({ theme: t }) },
         toggleTheme: () => {
           const next = get().theme === 'dark' ? 'light' : 'dark'
@@ -249,13 +264,16 @@ const useDesignStoreBase = create<State & Actions>()(
             const base = mine[0]
             let name = base?.name
             let material = base?.material
+            let paint = base?.paint
             if (patch.name !== undefined) name = patch.name.trim().slice(0, 40) || undefined
             if (patch.material !== undefined) material = patch.material ?? undefined
+            if (patch.paint !== undefined) paint = patch.paint && /^#[0-9a-f]{6}$/i.test(patch.paint) ? patch.paint : undefined
             const others = tags.filter(t => !mine.includes(t))
             const tag: RoomTag = { id: base?.id ?? nanoid(), at: base?.at ?? { x: at.x, y: at.y } }
             if (name) tag.name = name
             if (material) tag.material = material
-            const roomTags = name || material ? [...others, tag] : others
+            if (paint) tag.paint = paint
+            const roomTags = name || material || paint ? [...others, tag] : others
             return { design: commit(mapActive(s, f => ({ ...f, roomTags }))) }
           })
         },
@@ -513,7 +531,14 @@ const useDesignStoreBase = create<State & Actions>()(
         },
 
         updateFurnitureColor: (id, color) => {
-          set(s => ({ design: commit(mapActive(s, f => ({ ...f, furniture: f.furniture.map(x => x.id === id ? { ...x, color } : x) }))) }))
+          // An empty colour goes back to the catalog default (and the model's own finish in 3D).
+          const recolor = (x: Furniture): Furniture => {
+            if (color) return { ...x, color }
+            const out = { ...x }
+            delete out.color
+            return out
+          }
+          set(s => ({ design: commit(mapActive(s, f => ({ ...f, furniture: f.furniture.map(x => x.id === id ? recolor(x) : x) }))) }))
         },
 
         transformFurniture: (id, patch) => {

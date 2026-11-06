@@ -62,6 +62,8 @@ export type RoomTag = {
   at: Vec2
   name?: string
   material?: FloorMaterial
+  /** Wall paint colour (#rrggbb) for the room's side of its walls. */
+  paint?: string
 }
 
 export type Floor = {
@@ -84,6 +86,10 @@ export type ViewMode = '2d' | '3d'
 export type ActiveTool = 'select' | 'wall'
 
 export type CameraMode = 'orbit' | 'walk' | 'top' | 'front' | 'iso'
+
+/** How walls show in 3D: full height, cut away between the camera and the
+ *  rooms (a doll's-house view), or all lowered. */
+export type WallView = 'full' | 'cutaway' | 'low'
 
 /** Display units. Geometry is always stored in cm; this only affects UI. */
 export type Units = 'cm' | 'm' | 'ftin'
