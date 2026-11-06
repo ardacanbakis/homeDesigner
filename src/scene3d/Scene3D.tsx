@@ -362,7 +362,7 @@ export function Scene3D() {
         title={cameraMode === 'walk' ? 'Walls are always full height in Walk mode' : undefined}
         className={`absolute top-3 left-3 flex items-stretch rounded-lg overflow-hidden border border-gray-700/60 shadow-lg ${cameraMode === 'walk' ? 'opacity-50' : ''}`}
       >
-        <span className="flex items-center px-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400 bg-gray-900/85">Walls</span>
+        <span className="flex items-center px-2 text-[10px] font-semibold uppercase tracking-wider text-gray-500 bg-gray-800/85 border-r border-gray-700/60">Walls</span>
         {wallBtn('full', 'Full', 'Walls at full height')}
         {wallBtn('cutaway', 'Cutaway', 'Lower the walls between you and the rooms, like a doll’s house')}
         {wallBtn('low', 'Low', 'Lower every wall')}
